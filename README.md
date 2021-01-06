@@ -1,2 +1,2 @@
 # d-velopment.github.io
-D-Velopment :: Static Site
+D-Velopment :: Static Promo Site
