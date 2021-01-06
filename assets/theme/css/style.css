@@ -817,6 +817,7 @@ html,
 body {
   height: auto;
   min-height: 100vh;
+  background: rgb(35,35,35);
 }
 
 .dropup .dropdown-toggle::after {
