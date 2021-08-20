@@ -1,8 +1,5 @@
 node_modules/
-dist/
 .DS_Store
 .idea/
 coverage/
-public/ipack/
 docs/
-dist/
