@@ -1,5 +1,4 @@
 <script context="module">
-
   import Server from "./server.js"
   import DataStorage from "./session.js"
 
@@ -15,12 +14,11 @@
     gamesCarousel,
     gamesCarouselStructure,
   } from "../stores/store.js"
-  
-  import { urlAPI, urlConfiguration, appUser } from "../stores/setup.js"
 
-  const urlAuth = "https://localhost:5001/user/authenticate"
+  import { urlAuth, appUser } from "../stores/setup.js"
+
   let authData = null
-  
+
   Array.prototype.first = function () {
     return this[0]
   }
@@ -54,16 +52,10 @@
 
   // LOAD SERVER DATA
   const loadUserAuth = (callback) => {
-
     authData = DataStorage.permanentGet("auth", () => {
       Server.fetchPost(urlAuth, { username: "test", password: "test" }, null, (value) => {
-
         if (value.id != null) {
-          DataStorage.permanentSet(
-            "auth", 
-            value, 
-            new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).addDays(1)
-          )
+          DataStorage.permanentSet("auth", value, new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).addDays(1))
 
           authData = value
           appUser.set(authData)
@@ -81,7 +73,6 @@
       appUser.set(authData)
       callback()
     }
-    
   }
 
   // PROCESS LOADED DATA

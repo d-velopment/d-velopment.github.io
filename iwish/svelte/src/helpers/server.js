@@ -13,9 +13,34 @@ export const fetchPost = async (url, data, token, callback) => {
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      'Authorization': `${isNullOrEmpty(token) ? '' : 'Bearer ' + token}`
+      Authorization: `${isNullOrEmpty(token) ? "" : "Bearer " + token}`,
     },
     body: JSON.stringify(data),
+  }
+
+  try {
+    const response = await fetch(`${url}`, settings)
+    {
+      try {
+        const data = await response.json()
+        callback(data)
+      } catch (err) {
+        console.error(error)
+        callback(null)
+      }
+    }
+  } catch {}
+}
+
+export const fetchGet = async (url, token, callback) => {
+  if (isNullOrEmpty(url.trim())) return
+  const settings = {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `${isNullOrEmpty(token) ? "" : "Bearer " + token}`,
+    }
   }
 
   try {
@@ -66,6 +91,7 @@ export const pingWebAPI = async (url, callback) => {
 
 const Server = {
   fetchPost: fetchPost,
+  fetchGet: fetchGet,
   fetchWeb: fetchWeb,
   callWebAPI: callWebAPI,
   pingWebAPI: pingWebAPI,

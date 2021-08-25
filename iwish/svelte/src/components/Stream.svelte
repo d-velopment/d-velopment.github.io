@@ -1,21 +1,37 @@
 <script>
   import Server from "../helpers/server.js"
+  import { urlStream, appUser } from "../stores/setup.js"
 
-  const urlConfiguration = "https://localhost:5001/user/stream/0"
+  let pageIndex = 0
+  let streamDictionary = {}
 
-  
+  // LOAD STREAM DATA
+  const loadStreamPage = (page, token, callback) => {
 
-  // LOAD SERVER DATA
-  const loadServerData = (callback) => {
-    console.log("Load Server Data...")
+    if (token == null)
+      return
 
-    Server.fetchWeb(urlConfiguration, (value) => {
-      console.log("Loaded.")
+    Server.fetchGet(`${urlStream}${page}`, token, (value) => {
+      console.log("Load Stream Page", page)
       if (callback) callback(value)
     })
   }
 
+  let userDetails
+  appUser.subscribe((value) => {
+    userDetails = value
+
+    loadStreamPage(pageIndex, userDetails.jwtToken, (value) => {
+      console.log("LOAD")
+      const compiledValue = (0, eval)(`(${value.details})`)
+      streamDictionary[pageIndex] = compiledValue
+      console.log("YEA", streamDictionary)
+    })
+
+  })
   
+  
+
   // loadServerData((value) => console.log(value))
 </script>
 

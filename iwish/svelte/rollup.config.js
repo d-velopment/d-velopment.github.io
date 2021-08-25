@@ -78,7 +78,7 @@ export default [
       copyOnce: true
     }),
     !production && serve(),
-    !production && livereload('dist'),
+    // !production && livereload('dist'),
     production && terser({ output: { comments: false } }),
     production && replace({
       preventAssignment: false,
