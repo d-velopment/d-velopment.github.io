@@ -4,25 +4,17 @@ export const urlConfiguration = "https://dev-cdn.relaxg.net/casino/nexus/nexus-a
 export const urlAPI = "https://dev-casino-client.api.relaxg.net/capi/1.0/casino/eventtournaments/leaderboard?tournamentid="
 export const urlTranslations = "https://dev-cdn.relaxg.net/ubo-casino-api/translations?context=macguffin&locale=" // en_US
 
+export const appUserStructure = {
+  id: null,
+  firstName: "",
+  lastName: "",
+  username: "",
+  jwtToken: null
+}
+export const appUser = writable(appUserStructure)
+
 export const appConfigStructure = {
-  tournamentId: undefined,
-  tournamentType: undefined,
-  urlGame: undefined,
-  playerInfo: undefined,
-  playerRank: undefined,
-
-  colorMode: "",
-
-  inStartsAt: undefined,
-  inEndsAt: undefined,
-  isCancelled: undefined,
-
-  isTournamentAvailable: undefined,
-  isTournamentEntered: undefined, // Undefined = No Decision from player, True = Accepted, False = Declined
-  isPlayerAvailable: undefined,
-  isEmbeddableWidget: undefined,
-  isGameAvailable: undefined,
-  isGameVisible: true,
+  auth: null
 }
 export const appConfig = writable(appConfigStructure)
 

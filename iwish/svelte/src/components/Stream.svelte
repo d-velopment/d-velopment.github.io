@@ -1,4 +1,23 @@
-<script></script>
+<script>
+  import Server from "../helpers/server.js"
+
+  const urlConfiguration = "https://localhost:5001/user/stream/0"
+
+  
+
+  // LOAD SERVER DATA
+  const loadServerData = (callback) => {
+    console.log("Load Server Data...")
+
+    Server.fetchWeb(urlConfiguration, (value) => {
+      console.log("Loaded.")
+      if (callback) callback(value)
+    })
+  }
+
+  
+  // loadServerData((value) => console.log(value))
+</script>
 
 <style></style>
 

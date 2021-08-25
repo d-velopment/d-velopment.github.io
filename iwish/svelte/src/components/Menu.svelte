@@ -1,4 +1,9 @@
-<script></script>
+<script>
+  import { appUser } from "../stores/setup.js"
+
+  let userDetails
+  appUser.subscribe((value) => (userDetails = value))
+</script>
 
 <style></style>
 
@@ -6,7 +11,7 @@
   <nav class="navbar navbar-dropdown navbar-fixed-top navbar-expand-lg">
     <div class="container">
       <div class="navbar-brand">
-        <span class="navbar-caption-wrap"><a class="navbar-caption text-primary display-5" href="index.html">WISHDATE</a></span>
+        <span class="navbar-caption-wrap"><a class="navbar-caption text-primary display-5" href="/">WISHDATE</a></span>
       </div>
       <button
         class="navbar-toggler"
@@ -27,7 +32,7 @@
         <ul class="navbar-nav nav-dropdown nav-right" data-app-modern-menu="true">
           <li class="nav-item">
             <a class="nav-link link text-black text-primary display-4" href="index.html"
-              ><span class="mobi-mbri mobi-mbri-smile-face mbr-iconfont mbr-iconfont-btn"></span>Дмитрий</a>
+              ><span class="mobi-mbri mobi-mbri-smile-face mbr-iconfont mbr-iconfont-btn"></span>{userDetails.firstName} {userDetails.lastName}</a>
           </li>
           <li class="nav-item">
             <a class="nav-link link text-black text-primary display-4" href="index.html"
