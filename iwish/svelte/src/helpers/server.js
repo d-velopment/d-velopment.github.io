@@ -40,7 +40,7 @@ export const fetchGet = async (url, token, callback) => {
       Accept: "application/json",
       "Content-Type": "application/json",
       Authorization: `${isNullOrEmpty(token) ? "" : "Bearer " + token}`,
-    }
+    },
   }
 
   try {

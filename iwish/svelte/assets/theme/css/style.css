@@ -53,6 +53,10 @@ a, a:hover {
   line-height: 1.7;
 }
 
+.grey {
+  color: grey;
+}
+
 h1,
 h2,
 h3,
@@ -286,6 +290,7 @@ iframe {
 
 /*! Buttons */
 .mbr-section-btn {
+  text-align: right;
   margin-left: -0.6rem;
   margin-right: -0.6rem;
   font-size: 0;
