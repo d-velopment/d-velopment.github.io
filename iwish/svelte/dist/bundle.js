@@ -22,19 +22,32 @@ var app = (function () {
     function safe_not_equal(a, b) {
         return a != a ? b == b : a !== b || ((a && typeof a === 'object') || typeof a === 'function');
     }
-    let src_url_equal_anchor;
-    function src_url_equal(element_src, url) {
-        if (!src_url_equal_anchor) {
-            src_url_equal_anchor = document.createElement('a');
-        }
-        src_url_equal_anchor.href = url;
-        return element_src === src_url_equal_anchor.href;
-    }
     function is_empty(obj) {
         return Object.keys(obj).length === 0;
     }
     function append(target, node) {
         target.appendChild(node);
+    }
+    function append_styles(target, style_sheet_id, styles) {
+        const append_styles_to = get_root_for_style(target);
+        if (!append_styles_to.getElementById(style_sheet_id)) {
+            const style = element('style');
+            style.id = style_sheet_id;
+            style.textContent = styles;
+            append_stylesheet(append_styles_to, style);
+        }
+    }
+    function get_root_for_style(node) {
+        if (!node)
+            return document;
+        const root = node.getRootNode ? node.getRootNode() : node.ownerDocument;
+        if (root.host) {
+            return root;
+        }
+        return document;
+    }
+    function append_stylesheet(node, style) {
+        append(node.head || node, style);
     }
     function insert(target, node, anchor) {
         target.insertBefore(node, anchor || null);
@@ -65,6 +78,9 @@ var app = (function () {
     }
     function children(element) {
         return Array.from(element.childNodes);
+    }
+    function set_style(node, key, value, important) {
+        node.style.setProperty(key, value, important ? 'important' : '');
     }
     function custom_event(type, detail, bubbles = false) {
         const e = document.createEvent('CustomEvent');
@@ -1154,6 +1170,10 @@ var app = (function () {
     const { Object: Object_1, console: console_1 } = globals;
     const file$1 = "src/components/Stream.svelte";
 
+    function add_css(target) {
+    	append_styles(target, "svelte-152tipk", "sup.svelte-152tipk{font-size:1.2rem;font-weight:500}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiU3RyZWFtLnN2ZWx0ZSIsInNvdXJjZXMiOlsiU3RyZWFtLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgU2VydmVyIGZyb20gXCIuLi9oZWxwZXJzL3NlcnZlci5qc1wiXG4gIGltcG9ydCB7IHVybFN0cmVhbSwgYXBwVXNlciB9IGZyb20gXCIuLi9zdG9yZXMvc2V0dXAuanNcIlxuXG4gIGNvbnN0IGZvcm1hdERhdGUgPSAoZGF0ZSkgPT4ge1xuICAgIGNvbnN0IGV2ZW50RGF0ZSA9IG5ldyBEYXRlKGRhdGUpXG4gICAgY29uc3QgbW9udGhOYW1lcyA9IFtcItCv0L3QstCw0YDRj1wiLCBcItCk0LXQstGA0LDQu9GPXCIsIFwi0JzQsNGA0YLQsFwiLCBcItCQ0L/RgNC10LvRj1wiLCBcItCc0LDRj1wiLCBcItCY0Y7QvdGPXCIsIFwi0JjRjtC70Y9cIiwgXCLQkNCy0LPRg9GB0YLQsFwiLCBcItCh0LXQvdGC0Y/QsdGA0Y9cIiwgXCLQntC60YLRj9Cx0YDRj1wiLCBcItCd0L7Rj9Cx0YDRj1wiLCBcItCU0LXQutCw0LHRgNGPXCJdXG4gICAgcmV0dXJuIGBcbiAgICAgICR7ZXZlbnREYXRlLmdldERhdGUoKX1cbiAgICAgICR7bW9udGhOYW1lc1tldmVudERhdGUuZ2V0TW9udGgoKV19XG4gICAgICAke2V2ZW50RGF0ZS5nZXRGdWxsWWVhcigpfVxuICAgICAg0LPQvtC00LBcbiAgICBgXG4gIH1cblxuICBsZXQgcGFnZUluZGV4ID0gMFxuICBsZXQgc3RyZWFtRGljdGlvbmFyeSA9IHt9XG4gIGxldCBzdHJlYW1TaG93ID0gW11cblxuICAvLyBMT0FEIFNUUkVBTSBEQVRBXG4gIGNvbnN0IGxvYWRTdHJlYW1QYWdlID0gKHBhZ2UsIHRva2VuLCBjYWxsYmFjaykgPT4ge1xuICAgIGlmICh0b2tlbiA9PSBudWxsKSByZXR1cm5cbiAgICBTZXJ2ZXIuZmV0Y2hHZXQoYCR7dXJsU3RyZWFtfSR7cGFnZX1gLCB0b2tlbiwgKHZhbHVlKSA9PiB7XG4gICAgICBjb25zb2xlLmxvZyhcIkxvYWQgU3RyZWFtIFBhZ2UgI1wiLCBwYWdlKVxuXG4gICAgICBjb25zdCBjb21waWxlZFZhbHVlID0gKDAsIGV2YWwpKGAoJHt2YWx1ZS5kZXRhaWxzfSlgKVxuICAgICAgc3RyZWFtRGljdGlvbmFyeVtwYWdlXSA9IGNvbXBpbGVkVmFsdWVcbiAgICAgIHN0cmVhbVNob3cgPSBPYmplY3Qua2V5cyhzdHJlYW1EaWN0aW9uYXJ5KS5yZWR1Y2UoZnVuY3Rpb24gKHIsIGspIHtcbiAgICAgICAgcmV0dXJuIHIuY29uY2F0KHN0cmVhbURpY3Rpb25hcnlba10pXG4gICAgICB9LCBbXSlcblxuICAgICAgY29uc29sZS5sb2coXCJMb2FkZWQgc3RyZWFtIGVsZW1lbnRzXCIsIHN0cmVhbVNob3cpXG5cbiAgICAgIGlmIChjYWxsYmFjaykgY2FsbGJhY2sodmFsdWUpXG4gICAgfSlcbiAgfVxuXG4gIGxldCB1c2VyRGV0YWlsc1xuICBhcHBVc2VyLnN1YnNjcmliZSgodmFsdWUpID0+IHtcbiAgICB1c2VyRGV0YWlscyA9IHZhbHVlXG5cbiAgICBsb2FkU3RyZWFtUGFnZShwYWdlSW5kZXgsIHVzZXJEZXRhaWxzLmp3dFRva2VuLCAodmFsdWUpID0+IHtcbiAgICAgIHNldFRpbWVvdXQoKCkgPT4gbG9hZFN0cmVhbVBhZ2UocGFnZUluZGV4ICsgMSwgdXNlckRldGFpbHMuand0VG9rZW4pLCAyMDAwKVxuICAgIH0pXG4gIH0pXG48L3NjcmlwdD5cblxuPHN0eWxlPlxuICBzdXAge1xuICAgIGZvbnQtc2l6ZTogMS4ycmVtO1xuICAgIGZvbnQtd2VpZ2h0OiA1MDA7XG4gIH1cbjwvc3R5bGU+XG5cbjxzZWN0aW9uIGNsYXNzPVwiZmVhdHVyZXM4IGNpZC1zaGk4STlxQ0RBXCIgaWQ9XCJmZWF0dXJlczktMlwiPlxuICA8ZGl2IGNsYXNzPVwiY29udGFpbmVyXCI+XG4gICAgeyNlYWNoIHN0cmVhbVNob3cgYXMgY2FyZCwgaX1cbiAgICAgIDxkaXYgY2xhc3M9XCJjYXJkXCI+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjYXJkLXdyYXBwZXJcIj5cbiAgICAgICAgICA8ZGl2IGNsYXNzPVwicm93IGFsaWduLWl0ZW1zLWNlbnRlclwiPlxuICAgICAgICAgICAgPGRpdiBjbGFzcz1cImNvbC0xMiBjb2wtbWQtNFwiPlxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzPVwiaW1hZ2Utd3JhcHBlclwiIHN0eWxlPVwiYmFja2dyb3VuZC1pbWFnZTogdXJsKCd7Y2FyZC5JbWFnZX0nKTtcIj5cbiAgICAgICAgICAgICAgICA8IS0taW1nIHNyYz1cIntjYXJkLkltYWdlfVwiIGFsdD1cIntjYXJkLlRpdGxlfVwiIC8tLT5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjb2wtMTIgY29sLW1kXCI+XG4gICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjYXJkLWJveFwiPlxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJyb3dcIj5cbiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjb2wtbWRcIj5cbiAgICAgICAgICAgICAgICAgICAgPGg2IGNsYXNzPVwiY2FyZC10aXRsZSBtYnItZm9udHMtc3R5bGUgZGlzcGxheS01XCI+XG4gICAgICAgICAgICAgICAgICAgICAgPHN0cm9uZz57Y2FyZC5UaXRsZX08L3N0cm9uZz5cbiAgICAgICAgICAgICAgICAgICAgPC9oNj5cbiAgICAgICAgICAgICAgICAgICAgPHAgY2xhc3M9XCJtYnItdGV4dCBtYnItZm9udHMtc3R5bGUgZ3JleVwiPlxuICAgICAgICAgICAgICAgICAgICAgIHtjYXJkLkZyaWVuZEZpcnN0TmFtZX1cbiAgICAgICAgICAgICAgICAgICAgICB7Y2FyZC5GcmllbmRMYXN0TmFtZX0sXG4gICAgICAgICAgICAgICAgICAgICAge2Zvcm1hdERhdGUoY2FyZC5FdmVudERhdGUpfVxuICAgICAgICAgICAgICAgICAgICA8L3A+XG4gICAgICAgICAgICAgICAgICAgIDxwIGNsYXNzPVwibWJyLXRleHQgbWJyLWZvbnRzLXN0eWxlIGRpc3BsYXktN1wiPlxuICAgICAgICAgICAgICAgICAgICAgIHtjYXJkLkRlc2NyaXB0aW9uMX1cbiAgICAgICAgICAgICAgICAgICAgICA8aVxuICAgICAgICAgICAgICAgICAgICAgICAgPtC90LBcbiAgICAgICAgICAgICAgICAgICAgICAgIHtjYXJkLkV2ZW50VGl0bGV9XG4gICAgICAgICAgICAgICAgICAgICAgICB7bmV3IERhdGUoY2FyZC5FdmVudERhdGUpLmdldEZ1bGxZZWFyKCkgPT0gbmV3IERhdGUoKS5nZXRGdWxsWWVhcigpICsgMiA/IFwi0YfQtdGA0LXQtyDQs9C+0LRcIiA6IFwiXCJ9XG4gICAgICAgICAgICAgICAgICAgICAgPC9pPlxuICAgICAgICAgICAgICAgICAgICA8L3A+XG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjb2wtbWQtYXV0b1wiPlxuICAgICAgICAgICAgICAgICAgICA8cCBjbGFzcz1cInByaWNlIG1ici1mb250cy1zdHlsZSBkaXNwbGF5LTJcIj57Y2FyZC5QcmljZX08c3VwPjAwPC9zdXA+PC9wPlxuICAgICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzPVwibWJyLXNlY3Rpb24tYnRuXCI+PGEgaHJlZj1cImluZGV4Lmh0bWxcIiBjbGFzcz1cImJ0biBidG4tcHJpbWFyeSBkaXNwbGF5LTRcIj7Qn9C+0LTQsNGA0LjRgtGMPC9hPjwvZGl2PlxuICAgICAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICAgICAgICA8ZGl2PjwvZGl2PlxuICAgICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgIDwvZGl2PlxuICAgICAgICA8L2Rpdj5cbiAgICAgIDwvZGl2PlxuICAgIHsvZWFjaH1cbiAgPC9kaXY+XG48L3NlY3Rpb24+XG4iXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBZ0RFLEdBQUcsZUFBQyxDQUFDLEFBQ0gsU0FBUyxDQUFFLE1BQU0sQ0FDakIsV0FBVyxDQUFFLEdBQUcsQUFDbEIsQ0FBQyJ9 */");
+    }
+
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[6] = list[i];
@@ -1161,16 +1181,13 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (53:4) {#each streamShow as card, i}
+    // (57:4) {#each streamShow as card, i}
     function create_each_block(ctx) {
     	let div11;
     	let div10;
     	let div9;
     	let div1;
     	let div0;
-    	let img;
-    	let img_src_value;
-    	let img_alt_value;
     	let t0;
     	let div8;
     	let div7;
@@ -1226,7 +1243,6 @@ var app = (function () {
     			div9 = element("div");
     			div1 = element("div");
     			div0 = element("div");
-    			img = element("img");
     			t0 = space();
     			div8 = element("div");
     			div7 = element("div");
@@ -1264,46 +1280,45 @@ var app = (function () {
     			t20 = space();
     			div5 = element("div");
     			t21 = space();
-    			if (!src_url_equal(img.src, img_src_value = /*card*/ ctx[6].Image)) attr_dev(img, "src", img_src_value);
-    			attr_dev(img, "alt", img_alt_value = /*card*/ ctx[6].Title);
-    			add_location(img, file$1, 58, 16, 1707);
     			attr_dev(div0, "class", "image-wrapper");
-    			add_location(div0, file$1, 57, 14, 1663);
+    			set_style(div0, "background-image", "url('" + /*card*/ ctx[6].Image + "')");
+    			add_location(div0, file$1, 61, 14, 1697);
     			attr_dev(div1, "class", "col-12 col-md-4");
-    			add_location(div1, file$1, 56, 12, 1619);
-    			add_location(strong, file$1, 66, 22, 2035);
+    			add_location(div1, file$1, 60, 12, 1653);
+    			add_location(strong, file$1, 70, 22, 2121);
     			attr_dev(h6, "class", "card-title mbr-fonts-style display-5");
-    			add_location(h6, file$1, 65, 20, 1963);
+    			add_location(h6, file$1, 69, 20, 2049);
     			attr_dev(p0, "class", "mbr-text mbr-fonts-style grey");
-    			add_location(p0, file$1, 68, 20, 2111);
-    			add_location(i_1, file$1, 75, 22, 2450);
+    			add_location(p0, file$1, 72, 20, 2197);
+    			add_location(i_1, file$1, 79, 22, 2536);
     			attr_dev(p1, "class", "mbr-text mbr-fonts-style display-7");
-    			add_location(p1, file$1, 73, 20, 2339);
+    			add_location(p1, file$1, 77, 20, 2425);
     			attr_dev(div2, "class", "col-md");
-    			add_location(div2, file$1, 64, 18, 1922);
-    			add_location(sup, file$1, 83, 75, 2834);
+    			add_location(div2, file$1, 68, 18, 2008);
+    			attr_dev(sup, "class", "svelte-152tipk");
+    			add_location(sup, file$1, 87, 75, 2921);
     			attr_dev(p2, "class", "price mbr-fonts-style display-2");
-    			add_location(p2, file$1, 83, 20, 2779);
+    			add_location(p2, file$1, 87, 20, 2866);
     			attr_dev(a, "href", "index.html");
     			attr_dev(a, "class", "btn btn-primary display-4");
-    			add_location(a, file$1, 84, 49, 2901);
+    			add_location(a, file$1, 88, 49, 2988);
     			attr_dev(div3, "class", "mbr-section-btn");
-    			add_location(div3, file$1, 84, 20, 2872);
+    			add_location(div3, file$1, 88, 20, 2959);
     			attr_dev(div4, "class", "col-md-auto");
-    			add_location(div4, file$1, 82, 18, 2733);
-    			add_location(div5, file$1, 86, 18, 3018);
+    			add_location(div4, file$1, 86, 18, 2820);
+    			add_location(div5, file$1, 90, 18, 3105);
     			attr_dev(div6, "class", "row");
-    			add_location(div6, file$1, 63, 16, 1886);
+    			add_location(div6, file$1, 67, 16, 1972);
     			attr_dev(div7, "class", "card-box");
-    			add_location(div7, file$1, 62, 14, 1847);
+    			add_location(div7, file$1, 66, 14, 1933);
     			attr_dev(div8, "class", "col-12 col-md");
-    			add_location(div8, file$1, 61, 12, 1805);
+    			add_location(div8, file$1, 65, 12, 1891);
     			attr_dev(div9, "class", "row align-items-center");
-    			add_location(div9, file$1, 55, 10, 1570);
+    			add_location(div9, file$1, 59, 10, 1604);
     			attr_dev(div10, "class", "card-wrapper");
-    			add_location(div10, file$1, 54, 8, 1533);
+    			add_location(div10, file$1, 58, 8, 1567);
     			attr_dev(div11, "class", "card");
-    			add_location(div11, file$1, 53, 6, 1506);
+    			add_location(div11, file$1, 57, 6, 1540);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div11, anchor);
@@ -1311,7 +1326,6 @@ var app = (function () {
     			append_dev(div10, div9);
     			append_dev(div9, div1);
     			append_dev(div1, div0);
-    			append_dev(div0, img);
     			append_dev(div9, t0);
     			append_dev(div9, div8);
     			append_dev(div8, div7);
@@ -1349,12 +1363,8 @@ var app = (function () {
     			append_dev(div11, t21);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*streamShow*/ 1 && !src_url_equal(img.src, img_src_value = /*card*/ ctx[6].Image)) {
-    				attr_dev(img, "src", img_src_value);
-    			}
-
-    			if (dirty & /*streamShow*/ 1 && img_alt_value !== (img_alt_value = /*card*/ ctx[6].Title)) {
-    				attr_dev(img, "alt", img_alt_value);
+    			if (dirty & /*streamShow*/ 1) {
+    				set_style(div0, "background-image", "url('" + /*card*/ ctx[6].Image + "')");
     			}
 
     			if (dirty & /*streamShow*/ 1 && t1_value !== (t1_value = /*card*/ ctx[6].Title + "")) set_data_dev(t1, t1_value);
@@ -1379,7 +1389,7 @@ var app = (function () {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(53:4) {#each streamShow as card, i}",
+    		source: "(57:4) {#each streamShow as card, i}",
     		ctx
     	});
 
@@ -1407,10 +1417,10 @@ var app = (function () {
     			}
 
     			attr_dev(div, "class", "container");
-    			add_location(div, file$1, 51, 2, 1442);
+    			add_location(div, file$1, 55, 2, 1476);
     			attr_dev(section, "class", "features8 cid-shi8I9qCDA");
     			attr_dev(section, "id", "features9-2");
-    			add_location(section, file$1, 50, 0, 1380);
+    			add_location(section, file$1, 54, 0, 1414);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1567,7 +1577,7 @@ var app = (function () {
     class Stream extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {});
+    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {}, add_css);
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,

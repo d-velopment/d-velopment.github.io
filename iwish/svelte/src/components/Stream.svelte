@@ -4,8 +4,7 @@
 
   const formatDate = (date) => {
     const eventDate = new Date(date)
-    const monthNames = ["Января", "Февраля", "Марта", "Апреля", "Мая", "Июня",
-                      "Июля", "Августа", "Сентября", "Октября", "Ноября", "Декабря"]
+    const monthNames = ["Января", "Февраля", "Марта", "Апреля", "Мая", "Июня", "Июля", "Августа", "Сентября", "Октября", "Ноября", "Декабря"]
     return `
       ${eventDate.getDate()}
       ${monthNames[eventDate.getMonth()]}
@@ -13,7 +12,7 @@
       года
     `
   }
-  
+
   let pageIndex = 0
   let streamDictionary = {}
   let streamShow = []
@@ -46,7 +45,12 @@
   })
 </script>
 
-<style></style>
+<style>
+  sup {
+    font-size: 1.2rem;
+    font-weight: 500;
+  }
+</style>
 
 <section class="features8 cid-shi8I9qCDA" id="features9-2">
   <div class="container">
@@ -55,8 +59,8 @@
         <div class="card-wrapper">
           <div class="row align-items-center">
             <div class="col-12 col-md-4">
-              <div class="image-wrapper">
-                <img src="{card.Image}" alt="{card.Title}" />
+              <div class="image-wrapper" style="background-image: url('{card.Image}');">
+                <!--img src="{card.Image}" alt="{card.Title}" /-->
               </div>
             </div>
             <div class="col-12 col-md">
@@ -73,10 +77,10 @@
                     </p>
                     <p class="mbr-text mbr-fonts-style display-7">
                       {card.Description1}
-                      <i>на
+                      <i
+                        >на
                         {card.EventTitle}
-                        {new Date(card.EventDate).getFullYear() == new Date().getFullYear()+2
-                          ? "через год" : ""}
+                        {new Date(card.EventDate).getFullYear() == new Date().getFullYear() + 2 ? "через год" : ""}
                       </i>
                     </p>
                   </div>
