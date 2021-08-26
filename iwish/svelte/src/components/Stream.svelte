@@ -70,7 +70,7 @@
                     <h6 class="card-title mbr-fonts-style display-5">
                       <strong>{card.Title}</strong>
                     </h6>
-                    <p class="mbr-text mbr-fonts-style grey">
+                    <p class="mbr-text mbr-fonts-style grey bottom-less">
                       {card.FriendFirstName}
                       {card.FriendLastName},
                       {formatDate(card.EventDate)}
@@ -86,7 +86,10 @@
                   </div>
                   <div class="col-md-auto">
                     <p class="price mbr-fonts-style display-2">{card.Price}<sup>00</sup></p>
-                    <div class="mbr-section-btn"><a href="index.html" class="btn btn-primary display-4">Подарить</a></div>
+                    <div class="mbr-section-btn">
+                      <a href="index.html" class="btn btn-primary display-4 {card.IsReserved == 1 ? 'blocked' : ''}"
+                        >{card.IsReserved == 1 ? "Бронь" : "Подарить"}</a>
+                    </div>
                   </div>
                   <div></div>
                 </div>

@@ -55,6 +55,9 @@ a, a:hover {
 
 .grey {
   color: grey;
+}
+
+.bottom-less {
   margin-bottom: 0.5rem;
 }
 
@@ -315,6 +318,12 @@ iframe {
       -ms-flex-pack: center;
           justify-content: center;
   word-break: break-word;
+}
+
+.btn.blocked {
+  pointer-events: none;
+  background-color: grey !important;
+  border-color: grey !important;
 }
 
 .btn-sm {
