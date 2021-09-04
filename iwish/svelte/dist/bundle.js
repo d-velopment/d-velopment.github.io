@@ -2,6 +2,7 @@ var app = (function () {
     'use strict';
 
     function noop() { }
+    const identity = x => x;
     function add_location(element, file, line, column, char) {
         element.__svelte_meta = {
             loc: { file, line, column, char }
@@ -25,6 +26,41 @@ var app = (function () {
     function is_empty(obj) {
         return Object.keys(obj).length === 0;
     }
+
+    const is_client = typeof window !== 'undefined';
+    let now = is_client
+        ? () => window.performance.now()
+        : () => Date.now();
+    let raf = is_client ? cb => requestAnimationFrame(cb) : noop;
+
+    const tasks = new Set();
+    function run_tasks(now) {
+        tasks.forEach(task => {
+            if (!task.c(now)) {
+                tasks.delete(task);
+                task.f();
+            }
+        });
+        if (tasks.size !== 0)
+            raf(run_tasks);
+    }
+    /**
+     * Creates a new task that runs on each raf frame
+     * until it returns a falsy value or is aborted
+     */
+    function loop(callback) {
+        let task;
+        if (tasks.size === 0)
+            raf(run_tasks);
+        return {
+            promise: new Promise(fulfill => {
+                tasks.add(task = { c: callback, f: fulfill });
+            }),
+            abort() {
+                tasks.delete(task);
+            }
+        };
+    }
     function append(target, node) {
         target.appendChild(node);
     }
@@ -45,6 +81,11 @@ var app = (function () {
             return root;
         }
         return document;
+    }
+    function append_empty_stylesheet(node) {
+        const style_element = element('style');
+        append_stylesheet(get_root_for_style(node), style_element);
+        return style_element;
     }
     function append_stylesheet(node, style) {
         append(node.head || node, style);
@@ -86,6 +127,67 @@ var app = (function () {
         const e = document.createEvent('CustomEvent');
         e.initCustomEvent(type, bubbles, false, detail);
         return e;
+    }
+
+    const active_docs = new Set();
+    let active = 0;
+    // https://github.com/darkskyapp/string-hash/blob/master/index.js
+    function hash(str) {
+        let hash = 5381;
+        let i = str.length;
+        while (i--)
+            hash = ((hash << 5) - hash) ^ str.charCodeAt(i);
+        return hash >>> 0;
+    }
+    function create_rule(node, a, b, duration, delay, ease, fn, uid = 0) {
+        const step = 16.666 / duration;
+        let keyframes = '{\n';
+        for (let p = 0; p <= 1; p += step) {
+            const t = a + (b - a) * ease(p);
+            keyframes += p * 100 + `%{${fn(t, 1 - t)}}\n`;
+        }
+        const rule = keyframes + `100% {${fn(b, 1 - b)}}\n}`;
+        const name = `__svelte_${hash(rule)}_${uid}`;
+        const doc = get_root_for_style(node);
+        active_docs.add(doc);
+        const stylesheet = doc.__svelte_stylesheet || (doc.__svelte_stylesheet = append_empty_stylesheet(node).sheet);
+        const current_rules = doc.__svelte_rules || (doc.__svelte_rules = {});
+        if (!current_rules[name]) {
+            current_rules[name] = true;
+            stylesheet.insertRule(`@keyframes ${name} ${rule}`, stylesheet.cssRules.length);
+        }
+        const animation = node.style.animation || '';
+        node.style.animation = `${animation ? `${animation}, ` : ''}${name} ${duration}ms linear ${delay}ms 1 both`;
+        active += 1;
+        return name;
+    }
+    function delete_rule(node, name) {
+        const previous = (node.style.animation || '').split(', ');
+        const next = previous.filter(name
+            ? anim => anim.indexOf(name) < 0 // remove specific animation
+            : anim => anim.indexOf('__svelte') === -1 // remove all Svelte animations
+        );
+        const deleted = previous.length - next.length;
+        if (deleted) {
+            node.style.animation = next.join(', ');
+            active -= deleted;
+            if (!active)
+                clear_rules();
+        }
+    }
+    function clear_rules() {
+        raf(() => {
+            if (active)
+                return;
+            active_docs.forEach(doc => {
+                const stylesheet = doc.__svelte_stylesheet;
+                let i = stylesheet.cssRules.length;
+                while (i--)
+                    stylesheet.deleteRule(i);
+                doc.__svelte_rules = {};
+            });
+            active_docs.clear();
+        });
     }
 
     let current_component;
@@ -164,6 +266,20 @@ var app = (function () {
             $$.after_update.forEach(add_render_callback);
         }
     }
+
+    let promise;
+    function wait() {
+        if (!promise) {
+            promise = Promise.resolve();
+            promise.then(() => {
+                promise = null;
+            });
+        }
+        return promise;
+    }
+    function dispatch(node, direction, kind) {
+        node.dispatchEvent(custom_event(`${direction ? 'intro' : 'outro'}${kind}`));
+    }
     const outroing = new Set();
     let outros;
     function transition_in(block, local) {
@@ -187,6 +303,70 @@ var app = (function () {
             });
             block.o(local);
         }
+    }
+    const null_transition = { duration: 0 };
+    function create_in_transition(node, fn, params) {
+        let config = fn(node, params);
+        let running = false;
+        let animation_name;
+        let task;
+        let uid = 0;
+        function cleanup() {
+            if (animation_name)
+                delete_rule(node, animation_name);
+        }
+        function go() {
+            const { delay = 0, duration = 300, easing = identity, tick = noop, css } = config || null_transition;
+            if (css)
+                animation_name = create_rule(node, 0, 1, duration, delay, easing, css, uid++);
+            tick(0, 1);
+            const start_time = now() + delay;
+            const end_time = start_time + duration;
+            if (task)
+                task.abort();
+            running = true;
+            add_render_callback(() => dispatch(node, true, 'start'));
+            task = loop(now => {
+                if (running) {
+                    if (now >= end_time) {
+                        tick(1, 0);
+                        dispatch(node, true, 'end');
+                        cleanup();
+                        return running = false;
+                    }
+                    if (now >= start_time) {
+                        const t = easing((now - start_time) / duration);
+                        tick(t, 1 - t);
+                    }
+                }
+                return running;
+            });
+        }
+        let started = false;
+        return {
+            start() {
+                if (started)
+                    return;
+                started = true;
+                delete_rule(node);
+                if (is_function(config)) {
+                    config = config();
+                    wait().then(go);
+                }
+                else {
+                    go();
+                }
+            },
+            invalidate() {
+                started = false;
+            },
+            end() {
+                if (running) {
+                    cleanup();
+                    running = false;
+                }
+            }
+        };
     }
 
     const globals = (typeof window !== 'undefined'
@@ -436,8 +616,9 @@ var app = (function () {
         return { set, update, subscribe };
     }
 
-    const urlAuth = "https://localhost:5001/user/authenticate";
-    const urlStream = "https://localhost:5001/user/stream/"; // 0 - INITIAL PAGE
+    const urlRoot = "https://coreapi.work";
+    const urlAuth = `${urlRoot}/user/authenticate`;
+    const urlStream = `${urlRoot}/user/stream/`; // 0 - INITIAL PAGE
 
     const appUserStructure = {
       id: null,
@@ -522,15 +703,17 @@ var app = (function () {
 
     const fetchPost = async (url, data, token, callback) => {
       if (isNullOrEmpty(url.trim())) return
+      
       const settings = {
         method: "POST",
         headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `${isNullOrEmpty(token) ? "" : "Bearer " + token}`,
+          "Accept": "application/json",
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(data),
       };
+      if (!isNullOrEmpty(token))
+        settings.headers["Authorization"] = "Bearer " + token;
 
       try {
         const response = await fetch(`${url}`, settings);
@@ -539,11 +722,13 @@ var app = (function () {
             const data = await response.json();
             callback(data);
           } catch (err) {
-            console.error(error);
+            console.error(err);
             callback(null);
           }
         }
-      } catch {}
+      } catch (err) {
+        console.error(err);
+      }
     };
 
     const fetchGet = async (url, token, callback) => {
@@ -551,11 +736,12 @@ var app = (function () {
       const settings = {
         method: "GET",
         headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          Authorization: `${isNullOrEmpty(token) ? "" : "Bearer " + token}`,
+          "Accept": "application/json",
+          "Content-Type": "application/json"
         },
       };
+      if (!isNullOrEmpty(token))
+        settings.headers["Authorization"] = "Bearer " + token;
 
       try {
         const response = await fetch(`${url}`, settings);
@@ -646,9 +832,11 @@ var app = (function () {
     } */
     // LOAD SERVER DATA
     const loadUserAuth = callback => {
+    	const authCredentials = { "username": "test", "password": "test" };
+
     	authData = DataStorage.permanentGet("auth", () => {
-    		Server.fetchPost(urlAuth, { username: "test", password: "test" }, null, value => {
-    			if (value.id != null) {
+    		Server.fetchPost(urlAuth, authCredentials, null, value => {
+    			if (value != null && value.id !== null) {
     				DataStorage.permanentSet("auth", value, new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).addDays(1));
     				authData = value;
     				appUser.set(authData);
@@ -1165,23 +1353,43 @@ var app = (function () {
     	}
     }
 
+    function cubicOut(t) {
+        const f = t - 1.0;
+        return f * f * f + 1.0;
+    }
+
+    function fly(node, { delay = 0, duration = 400, easing = cubicOut, x = 0, y = 0, opacity = 0 } = {}) {
+        const style = getComputedStyle(node);
+        const target_opacity = +style.opacity;
+        const transform = style.transform === 'none' ? '' : style.transform;
+        const od = target_opacity * (1 - opacity);
+        return {
+            delay,
+            duration,
+            easing,
+            css: (t, u) => `
+			transform: ${transform} translate(${(1 - t) * x}px, ${(1 - t) * y}px);
+			opacity: ${target_opacity - (od * u)}`
+        };
+    }
+
     /* src/components/Stream.svelte generated by Svelte v3.42.1 */
 
     const { Object: Object_1, console: console_1 } = globals;
     const file$1 = "src/components/Stream.svelte";
 
     function add_css(target) {
-    	append_styles(target, "svelte-152tipk", "sup.svelte-152tipk{font-size:1.2rem;font-weight:500}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiU3RyZWFtLnN2ZWx0ZSIsInNvdXJjZXMiOlsiU3RyZWFtLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgU2VydmVyIGZyb20gXCIuLi9oZWxwZXJzL3NlcnZlci5qc1wiXG4gIGltcG9ydCB7IHVybFN0cmVhbSwgYXBwVXNlciB9IGZyb20gXCIuLi9zdG9yZXMvc2V0dXAuanNcIlxuXG4gIGNvbnN0IGZvcm1hdERhdGUgPSAoZGF0ZSkgPT4ge1xuICAgIGNvbnN0IGV2ZW50RGF0ZSA9IG5ldyBEYXRlKGRhdGUpXG4gICAgY29uc3QgbW9udGhOYW1lcyA9IFtcItCv0L3QstCw0YDRj1wiLCBcItCk0LXQstGA0LDQu9GPXCIsIFwi0JzQsNGA0YLQsFwiLCBcItCQ0L/RgNC10LvRj1wiLCBcItCc0LDRj1wiLCBcItCY0Y7QvdGPXCIsIFwi0JjRjtC70Y9cIiwgXCLQkNCy0LPRg9GB0YLQsFwiLCBcItCh0LXQvdGC0Y/QsdGA0Y9cIiwgXCLQntC60YLRj9Cx0YDRj1wiLCBcItCd0L7Rj9Cx0YDRj1wiLCBcItCU0LXQutCw0LHRgNGPXCJdXG4gICAgcmV0dXJuIGBcbiAgICAgICR7ZXZlbnREYXRlLmdldERhdGUoKX1cbiAgICAgICR7bW9udGhOYW1lc1tldmVudERhdGUuZ2V0TW9udGgoKV19XG4gICAgICAke2V2ZW50RGF0ZS5nZXRGdWxsWWVhcigpfVxuICAgICAg0LPQvtC00LBcbiAgICBgXG4gIH1cblxuICBsZXQgcGFnZUluZGV4ID0gMFxuICBsZXQgc3RyZWFtRGljdGlvbmFyeSA9IHt9XG4gIGxldCBzdHJlYW1TaG93ID0gW11cblxuICAvLyBMT0FEIFNUUkVBTSBEQVRBXG4gIGNvbnN0IGxvYWRTdHJlYW1QYWdlID0gKHBhZ2UsIHRva2VuLCBjYWxsYmFjaykgPT4ge1xuICAgIGlmICh0b2tlbiA9PSBudWxsKSByZXR1cm5cbiAgICBTZXJ2ZXIuZmV0Y2hHZXQoYCR7dXJsU3RyZWFtfSR7cGFnZX1gLCB0b2tlbiwgKHZhbHVlKSA9PiB7XG4gICAgICBjb25zb2xlLmxvZyhcIkxvYWQgU3RyZWFtIFBhZ2UgI1wiLCBwYWdlKVxuXG4gICAgICBjb25zdCBjb21waWxlZFZhbHVlID0gKDAsIGV2YWwpKGAoJHt2YWx1ZS5kZXRhaWxzfSlgKVxuICAgICAgc3RyZWFtRGljdGlvbmFyeVtwYWdlXSA9IGNvbXBpbGVkVmFsdWVcbiAgICAgIHN0cmVhbVNob3cgPSBPYmplY3Qua2V5cyhzdHJlYW1EaWN0aW9uYXJ5KS5yZWR1Y2UoZnVuY3Rpb24gKHIsIGspIHtcbiAgICAgICAgcmV0dXJuIHIuY29uY2F0KHN0cmVhbURpY3Rpb25hcnlba10pXG4gICAgICB9LCBbXSlcblxuICAgICAgY29uc29sZS5sb2coXCJMb2FkZWQgc3RyZWFtIGVsZW1lbnRzXCIsIHN0cmVhbVNob3cpXG5cbiAgICAgIGlmIChjYWxsYmFjaykgY2FsbGJhY2sodmFsdWUpXG4gICAgfSlcbiAgfVxuXG4gIGxldCB1c2VyRGV0YWlsc1xuICBhcHBVc2VyLnN1YnNjcmliZSgodmFsdWUpID0+IHtcbiAgICB1c2VyRGV0YWlscyA9IHZhbHVlXG5cbiAgICBsb2FkU3RyZWFtUGFnZShwYWdlSW5kZXgsIHVzZXJEZXRhaWxzLmp3dFRva2VuLCAodmFsdWUpID0+IHtcbiAgICAgIHNldFRpbWVvdXQoKCkgPT4gbG9hZFN0cmVhbVBhZ2UocGFnZUluZGV4ICsgMSwgdXNlckRldGFpbHMuand0VG9rZW4pLCAyMDAwKVxuICAgIH0pXG4gIH0pXG48L3NjcmlwdD5cblxuPHN0eWxlPlxuICBzdXAge1xuICAgIGZvbnQtc2l6ZTogMS4ycmVtO1xuICAgIGZvbnQtd2VpZ2h0OiA1MDA7XG4gIH1cbjwvc3R5bGU+XG5cbjxzZWN0aW9uIGNsYXNzPVwiZmVhdHVyZXM4IGNpZC1zaGk4STlxQ0RBXCIgaWQ9XCJmZWF0dXJlczktMlwiPlxuICA8ZGl2IGNsYXNzPVwiY29udGFpbmVyXCI+XG4gICAgeyNlYWNoIHN0cmVhbVNob3cgYXMgY2FyZCwgaX1cbiAgICAgIDxkaXYgY2xhc3M9XCJjYXJkXCI+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjYXJkLXdyYXBwZXJcIj5cbiAgICAgICAgICA8ZGl2IGNsYXNzPVwicm93IGFsaWduLWl0ZW1zLWNlbnRlclwiPlxuICAgICAgICAgICAgPGRpdiBjbGFzcz1cImNvbC0xMiBjb2wtbWQtNFwiPlxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzPVwiaW1hZ2Utd3JhcHBlclwiIHN0eWxlPVwiYmFja2dyb3VuZC1pbWFnZTogdXJsKCd7Y2FyZC5JbWFnZX0nKTtcIj5cbiAgICAgICAgICAgICAgICA8IS0taW1nIHNyYz1cIntjYXJkLkltYWdlfVwiIGFsdD1cIntjYXJkLlRpdGxlfVwiIC8tLT5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjb2wtMTIgY29sLW1kXCI+XG4gICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjYXJkLWJveFwiPlxuICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJyb3dcIj5cbiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjb2wtbWRcIj5cbiAgICAgICAgICAgICAgICAgICAgPGg2IGNsYXNzPVwiY2FyZC10aXRsZSBtYnItZm9udHMtc3R5bGUgZGlzcGxheS01XCI+XG4gICAgICAgICAgICAgICAgICAgICAgPHN0cm9uZz57Y2FyZC5UaXRsZX08L3N0cm9uZz5cbiAgICAgICAgICAgICAgICAgICAgPC9oNj5cbiAgICAgICAgICAgICAgICAgICAgPHAgY2xhc3M9XCJtYnItdGV4dCBtYnItZm9udHMtc3R5bGUgZ3JleSBib3R0b20tbGVzc1wiPlxuICAgICAgICAgICAgICAgICAgICAgIHtjYXJkLkZyaWVuZEZpcnN0TmFtZX1cbiAgICAgICAgICAgICAgICAgICAgICB7Y2FyZC5GcmllbmRMYXN0TmFtZX0sXG4gICAgICAgICAgICAgICAgICAgICAge2Zvcm1hdERhdGUoY2FyZC5FdmVudERhdGUpfVxuICAgICAgICAgICAgICAgICAgICA8L3A+XG4gICAgICAgICAgICAgICAgICAgIDxwIGNsYXNzPVwibWJyLXRleHQgbWJyLWZvbnRzLXN0eWxlIGRpc3BsYXktN1wiPlxuICAgICAgICAgICAgICAgICAgICAgIHtjYXJkLkRlc2NyaXB0aW9uMX1cbiAgICAgICAgICAgICAgICAgICAgICA8aVxuICAgICAgICAgICAgICAgICAgICAgICAgPtC90LBcbiAgICAgICAgICAgICAgICAgICAgICAgIHtjYXJkLkV2ZW50VGl0bGV9XG4gICAgICAgICAgICAgICAgICAgICAgICB7bmV3IERhdGUoY2FyZC5FdmVudERhdGUpLmdldEZ1bGxZZWFyKCkgPT0gbmV3IERhdGUoKS5nZXRGdWxsWWVhcigpICsgMiA/IFwi0YfQtdGA0LXQtyDQs9C+0LRcIiA6IFwiXCJ9XG4gICAgICAgICAgICAgICAgICAgICAgPC9pPlxuICAgICAgICAgICAgICAgICAgICA8L3A+XG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJjb2wtbWQtYXV0b1wiPlxuICAgICAgICAgICAgICAgICAgICA8cCBjbGFzcz1cInByaWNlIG1ici1mb250cy1zdHlsZSBkaXNwbGF5LTJcIj57Y2FyZC5QcmljZX08c3VwPjAwPC9zdXA+PC9wPlxuICAgICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzPVwibWJyLXNlY3Rpb24tYnRuXCI+XG4gICAgICAgICAgICAgICAgICAgICAgPGEgaHJlZj1cImluZGV4Lmh0bWxcIiBjbGFzcz1cImJ0biBidG4tcHJpbWFyeSBkaXNwbGF5LTQge2NhcmQuSXNSZXNlcnZlZCA9PSAxID8gJ2Jsb2NrZWQnIDogJyd9XCJcbiAgICAgICAgICAgICAgICAgICAgICAgID57Y2FyZC5Jc1Jlc2VydmVkID09IDEgPyBcItCR0YDQvtC90YxcIiA6IFwi0J/QvtC00LDRgNC40YLRjFwifTwvYT5cbiAgICAgICAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgICAgIDxkaXY+PC9kaXY+XG4gICAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgPC9kaXY+XG4gICAgICAgIDwvZGl2PlxuICAgICAgPC9kaXY+XG4gICAgey9lYWNofVxuICA8L2Rpdj5cbjwvc2VjdGlvbj5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFnREUsR0FBRyxlQUFDLENBQUMsQUFDSCxTQUFTLENBQUUsTUFBTSxDQUNqQixXQUFXLENBQUUsR0FBRyxBQUNsQixDQUFDIn0= */");
+    	append_styles(target, "svelte-1pfdwgq", "sup.svelte-1pfdwgq{font-size:1.2rem;font-weight:500}.loader.svelte-1pfdwgq{position:absolute;height:50px;width:100%;margin-top:8px}.loading.svelte-1pfdwgq{background-image:url(\"assets/loading.svg\");height:100%;width:100%;background-position:center;background-repeat:no-repeat;background-size:contain}\n/*# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiU3RyZWFtLnN2ZWx0ZSIsInNvdXJjZXMiOlsiU3RyZWFtLnN2ZWx0ZSJdLCJzb3VyY2VzQ29udGVudCI6WyI8c2NyaXB0PlxuICBpbXBvcnQgU2VydmVyIGZyb20gXCIuLi9oZWxwZXJzL3NlcnZlci5qc1wiXG4gIGltcG9ydCB7IHVybFN0cmVhbSwgYXBwVXNlciB9IGZyb20gXCIuLi9zdG9yZXMvc2V0dXAuanNcIlxuICBpbXBvcnQgeyBmbHkgfSBmcm9tIFwic3ZlbHRlL3RyYW5zaXRpb25cIlxuXG4gIGNvbnN0IGZvcm1hdERhdGUgPSAoZGF0ZSkgPT4ge1xuICAgIGNvbnN0IGV2ZW50RGF0ZSA9IG5ldyBEYXRlKGRhdGUpXG4gICAgY29uc3Qgbm93RGF0ZSA9IG5ldyBEYXRlKClcbiAgICBjb25zdCBtb250aE5hbWVzID0gW1wi0K/QvdCy0LDRgNGPXCIsIFwi0KTQtdCy0YDQsNC70Y9cIiwgXCLQnNCw0YDRgtCwXCIsIFwi0JDQv9GA0LXQu9GPXCIsIFwi0JzQsNGPXCIsIFwi0JjRjtC90Y9cIiwgXCLQmNGO0LvRj1wiLCBcItCQ0LLQs9GD0YHRgtCwXCIsIFwi0KHQtdC90YLRj9Cx0YDRj1wiLCBcItCe0LrRgtGP0LHRgNGPXCIsIFwi0J3QvtGP0LHRgNGPXCIsIFwi0JTQtdC60LDQsdGA0Y9cIl1cbiAgICByZXR1cm4gYFxuICAgICAgJHtldmVudERhdGUuZ2V0RGF0ZSgpfVxuICAgICAgJHttb250aE5hbWVzW2V2ZW50RGF0ZS5nZXRNb250aCgpXX1cbiAgICAgICR7ZXZlbnREYXRlLmdldEZ1bGxZZWFyKCkgPT0gbm93RGF0ZS5nZXRGdWxsWWVhcigpICsgMSA/IFwi0YHQu9C10LTRg9GO0YnQtdCz0L4g0LPQvtC00LBcIiA6IFwiXCJ9XG4gICAgYFxuICB9XG5cbiAgbGV0IHBhZ2VJbmRleCA9IDBcbiAgbGV0IHBhZ2VJdGVtc1NpemUgPSAtMSAvLyBERVRFQ1QgT05FIFBBR0UgRUxFTUVOVFMgQU1PVU5UIChGT1IgRkxZLkRFTEFZIENBTENVTEFUSU9OIEFORCBQUkUtREVURUNUIEVORCBPRiBBIExJU1QpXG4gIGxldCBpc05leHRQYWdlTG9hZGVkID0gZmFsc2VcbiAgbGV0IGlzTGFzdFBhZ2VMb2FkZWQgPSBmYWxzZVxuICBsZXQgc3RyZWFtRGljdGlvbmFyeSA9IHt9XG4gIGxldCBzdHJlYW1TaG93ID0gW11cblxuICAvLyBMT0FEIFNUUkVBTSBEQVRBXG4gIGNvbnN0IGxvYWRTdHJlYW1QYWdlID0gKHBhZ2UsIHRva2VuLCBjYWxsYmFjaykgPT4ge1xuXG4gICAgaWYgKHRva2VuID09IG51bGwgfHwgaXNMYXN0UGFnZUxvYWRlZCkgcmV0dXJuXG5cbiAgICBjb25zb2xlLmxvZyh0b2tlbilcbiAgICBTZXJ2ZXIuZmV0Y2hHZXQoYCR7dXJsU3RyZWFtfSR7cGFnZX1gLCB0b2tlbiwgKHZhbHVlKSA9PiB7XG4gICAgICBjb25zb2xlLmxvZyhcIkxvYWQgU3RyZWFtIFBhZ2UgI1wiLCBwYWdlLCB2YWx1ZSlcblxuICAgICAgY29uc3QgY29tcGlsZWRWYWx1ZSA9ICgwLCBldmFsKShgKCR7dmFsdWUuZGV0YWlsc30pYClcblxuICAgICAgaWYgKGNvbXBpbGVkVmFsdWUubGVuZ3RoID09IDApIHtcbiAgICAgICAgaXNMYXN0UGFnZUxvYWRlZCA9IHRydWVcbiAgICAgICAgcmV0dXJuXG4gICAgICB9XG5cbiAgICAgIHBhZ2VJdGVtc1NpemUgPSBwYWdlSXRlbXNTaXplID09IC0xID8gY29tcGlsZWRWYWx1ZS5sZW5ndGggOiBwYWdlSXRlbXNTaXplXG5cbiAgICAgIHN0cmVhbURpY3Rpb25hcnlbcGFnZV0gPSBjb21waWxlZFZhbHVlXG4gICAgICBzdHJlYW1TaG93ID0gT2JqZWN0LmtleXMoc3RyZWFtRGljdGlvbmFyeSkucmVkdWNlKGZ1bmN0aW9uIChyLCBrKSB7XG4gICAgICAgIHJldHVybiByLmNvbmNhdChzdHJlYW1EaWN0aW9uYXJ5W2tdKVxuICAgICAgfSwgW10pXG5cbiAgICAgIGNvbnNvbGUubG9nKFwiTG9hZGVkIHN0cmVhbSBlbGVtZW50c1wiLCBzdHJlYW1TaG93KVxuXG4gICAgICBpZiAoY29tcGlsZWRWYWx1ZS5sZW5ndGggIT0gcGFnZUl0ZW1zU2l6ZSkge1xuICAgICAgICBpc0xhc3RQYWdlTG9hZGVkID0gdHJ1ZVxuICAgICAgfVxuXG4gICAgICBpZiAoY2FsbGJhY2spIGNhbGxiYWNrKHZhbHVlKVxuICAgIH0pXG4gIH1cblxuICBsZXQgdXNlckRldGFpbHNcbiAgYXBwVXNlci5zdWJzY3JpYmUoKHZhbHVlKSA9PiB7XG4gICAgdXNlckRldGFpbHMgPSB2YWx1ZVxuICAgIGxvYWRTdHJlYW1QYWdlKHBhZ2VJbmRleCwgdXNlckRldGFpbHMuand0VG9rZW4sICh2YWx1ZSkgPT4gKGlzTmV4dFBhZ2VMb2FkZWQgPSB0cnVlKSlcbiAgfSlcblxuICB3aW5kb3cuYWRkRXZlbnRMaXN0ZW5lcihcInNjcm9sbFwiLCAoZSkgPT4ge1xuICAgIHZhciBoID0gZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50LFxuICAgICAgYiA9IGRvY3VtZW50LmJvZHksXG4gICAgICBzdCA9IFwic2Nyb2xsVG9wXCIsXG4gICAgICBzaCA9IFwic2Nyb2xsSGVpZ2h0XCJcbiAgICBjb25zdCBzY3IgPSAoKGhbc3RdIHx8IGJbc3RdKSAvICgoaFtzaF0gfHwgYltzaF0pIC0gaC5jbGllbnRIZWlnaHQpKSAqIDEwMFxuXG4gICAgaWYgKGlzTmV4dFBhZ2VMb2FkZWQgJiYgc2NyID4gNTApIHtcbiAgICAgIGlzTmV4dFBhZ2VMb2FkZWQgPSBmYWxzZVxuICAgICAgcGFnZUluZGV4KytcbiAgICAgIGxvYWRTdHJlYW1QYWdlKHBhZ2VJbmRleCwgdXNlckRldGFpbHMuand0VG9rZW4sICh2YWx1ZSkgPT4gKGlzTmV4dFBhZ2VMb2FkZWQgPSB0cnVlKSlcbiAgICB9XG4gIH0pXG48L3NjcmlwdD5cblxuPHN0eWxlPlxuICBzdXAge1xuICAgIGZvbnQtc2l6ZTogMS4ycmVtO1xuICAgIGZvbnQtd2VpZ2h0OiA1MDA7XG4gIH1cblxuICAubG9hZGVyIHtcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XG4gICAgaGVpZ2h0OiA1MHB4O1xuICAgIHdpZHRoOiAxMDAlO1xuICAgIG1hcmdpbi10b3A6IDhweDtcbiAgfVxuXG4gIC5sb2FkaW5nIHtcbiAgICBiYWNrZ3JvdW5kLWltYWdlOiB1cmwoXCJhc3NldHMvbG9hZGluZy5zdmdcIik7XG4gICAgaGVpZ2h0OiAxMDAlO1xuICAgIHdpZHRoOiAxMDAlO1xuICAgIGJhY2tncm91bmQtcG9zaXRpb246IGNlbnRlcjtcbiAgICBiYWNrZ3JvdW5kLXJlcGVhdDogbm8tcmVwZWF0O1xuICAgIGJhY2tncm91bmQtc2l6ZTogY29udGFpbjtcbiAgfVxuPC9zdHlsZT5cblxuPHNlY3Rpb24gY2xhc3M9XCJmZWF0dXJlczggY2lkLXNoaThJOXFDREFcIiBpZD1cImZlYXR1cmVzOS0yXCI+XG4gIDxkaXYgY2xhc3M9XCJjb250YWluZXJcIj5cbiAgICB7I2VhY2ggc3RyZWFtU2hvdyBhcyBjYXJkLCBpfVxuICAgICAgPGRpdiBpbjpmbHk9XCJ7eyB5OiAtMjUsIGRlbGF5OiAoaSAlIHBhZ2VJdGVtc1NpemUpICogMTAwIH19XCIgY2xhc3M9XCJjYXJkXCI+XG4gICAgICAgIDxkaXYgY2xhc3M9XCJjYXJkLXdyYXBwZXJcIj5cbiAgICAgICAgICA8ZGl2IGNsYXNzPVwicm93IGFsaWduLWl0ZW1zLWNlbnRlclwiPlxuICAgICAgICAgICAgPGRpdiBjbGFzcz1cImNvbC0xMiBjb2wtbWQtNFwiPlxuICAgICAgICAgICAgICA8ZGl2IGNsYXNzPVwiaW1hZ2Utd3JhcHBlclwiIHN0eWxlPVwiYmFja2dyb3VuZC1pbWFnZTogdXJsKCd7Y2FyZC5JbWFnZX0nKTtcIj48L2Rpdj5cbiAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgPGRpdiBjbGFzcz1cImNvbC0xMiBjb2wtbWRcIj5cbiAgICAgICAgICAgICAgPGRpdiBjbGFzcz1cImNhcmQtYm94XCI+XG4gICAgICAgICAgICAgICAgPGRpdiBjbGFzcz1cInJvd1wiPlxuICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzcz1cImNvbC1tZFwiPlxuICAgICAgICAgICAgICAgICAgICA8aDYgY2xhc3M9XCJjYXJkLXRpdGxlIG1ici1mb250cy1zdHlsZSBkaXNwbGF5LTVcIj5cbiAgICAgICAgICAgICAgICAgICAgICA8c3Ryb25nPntjYXJkLlRpdGxlfTwvc3Ryb25nPlxuICAgICAgICAgICAgICAgICAgICA8L2g2PlxuICAgICAgICAgICAgICAgICAgICA8cCBjbGFzcz1cIm1ici10ZXh0IG1ici1mb250cy1zdHlsZSBncmV5IGJvdHRvbS1sZXNzXCI+XG4gICAgICAgICAgICAgICAgICAgICAge2NhcmQuRnJpZW5kRmlyc3ROYW1lfVxuICAgICAgICAgICAgICAgICAgICAgIHtjYXJkLkZyaWVuZExhc3ROYW1lfSxcbiAgICAgICAgICAgICAgICAgICAgICB7Zm9ybWF0RGF0ZShjYXJkLkV2ZW50RGF0ZSl9XG4gICAgICAgICAgICAgICAgICAgIDwvcD5cbiAgICAgICAgICAgICAgICAgICAgPHAgY2xhc3M9XCJtYnItdGV4dCBtYnItZm9udHMtc3R5bGUgZGlzcGxheS03XCI+XG4gICAgICAgICAgICAgICAgICAgICAge2NhcmQuRGVzY3JpcHRpb24xfVxuICAgICAgICAgICAgICAgICAgICAgIDxpXG4gICAgICAgICAgICAgICAgICAgICAgICA+0L3QsFxuICAgICAgICAgICAgICAgICAgICAgICAge2NhcmQuRXZlbnRUaXRsZX1cbiAgICAgICAgICAgICAgICAgICAgICAgIHtuZXcgRGF0ZShjYXJkLkV2ZW50RGF0ZSkuZ2V0RnVsbFllYXIoKSA9PSBuZXcgRGF0ZSgpLmdldEZ1bGxZZWFyKCkgKyAyID8gXCLRh9C10YDQtdC3INCz0L7QtFwiIDogXCJcIn1cbiAgICAgICAgICAgICAgICAgICAgICA8L2k+XG4gICAgICAgICAgICAgICAgICAgIDwvcD5cbiAgICAgICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzcz1cImNvbC1tZC1hdXRvXCI+XG4gICAgICAgICAgICAgICAgICAgIDxwIGNsYXNzPVwicHJpY2UgbWJyLWZvbnRzLXN0eWxlIGRpc3BsYXktMlwiPntjYXJkLlByaWNlfTxzdXA+MDA8L3N1cD48L3A+XG4gICAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9XCJtYnItc2VjdGlvbi1idG5cIj5cbiAgICAgICAgICAgICAgICAgICAgICA8YSBocmVmPVwiaW5kZXguaHRtbFwiIGNsYXNzPVwiYnRuIGJ0bi1wcmltYXJ5IGRpc3BsYXktNCB7Y2FyZC5Jc1Jlc2VydmVkID09IDEgPyAnYmxvY2tlZCcgOiAnJ31cIlxuICAgICAgICAgICAgICAgICAgICAgICAgPntjYXJkLklzUmVzZXJ2ZWQgPT0gMSA/IFwi0JHRgNC+0L3RjFwiIDogXCLQn9C+0LTQsNGA0LjRgtGMXCJ9PC9hPlxuICAgICAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgICAgIDwvZGl2PlxuICAgICAgICAgICAgICAgICAgPGRpdj48L2Rpdj5cbiAgICAgICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICAgICAgPC9kaXY+XG4gICAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgICA8L2Rpdj5cbiAgICAgICAgPC9kaXY+XG4gICAgICA8L2Rpdj5cbiAgICB7L2VhY2h9XG4gIDwvZGl2PlxuXG4gIHsjaWYgIWlzTmV4dFBhZ2VMb2FkZWQgJiYgIWlzTGFzdFBhZ2VMb2FkZWR9XG4gICAgPGRpdiBjbGFzcz1cImxvYWRlclwiPlxuICAgICAgPGRpdiBjbGFzcz1cImxvYWRpbmdcIj48L2Rpdj5cbiAgICA8L2Rpdj5cbiAgey9pZn1cbjwvc2VjdGlvbj5cbiJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUE4RUUsR0FBRyxlQUFDLENBQUMsQUFDSCxTQUFTLENBQUUsTUFBTSxDQUNqQixXQUFXLENBQUUsR0FBRyxBQUNsQixDQUFDLEFBRUQsT0FBTyxlQUFDLENBQUMsQUFDUCxRQUFRLENBQUUsUUFBUSxDQUNsQixNQUFNLENBQUUsSUFBSSxDQUNaLEtBQUssQ0FBRSxJQUFJLENBQ1gsVUFBVSxDQUFFLEdBQUcsQUFDakIsQ0FBQyxBQUVELFFBQVEsZUFBQyxDQUFDLEFBQ1IsZ0JBQWdCLENBQUUsSUFBSSxvQkFBb0IsQ0FBQyxDQUMzQyxNQUFNLENBQUUsSUFBSSxDQUNaLEtBQUssQ0FBRSxJQUFJLENBQ1gsbUJBQW1CLENBQUUsTUFBTSxDQUMzQixpQkFBaUIsQ0FBRSxTQUFTLENBQzVCLGVBQWUsQ0FBRSxPQUFPLEFBQzFCLENBQUMifQ== */");
     }
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[6] = list[i];
-    	child_ctx[8] = i;
+    	child_ctx[9] = list[i];
+    	child_ctx[11] = i;
     	return child_ctx;
     }
 
-    // (57:4) {#each streamShow as card, i}
+    // (103:4) {#each streamShow as card, i}
     function create_each_block(ctx) {
     	let div11;
     	let div10;
@@ -1195,30 +1403,30 @@ var app = (function () {
     	let div2;
     	let h6;
     	let strong;
-    	let t1_value = /*card*/ ctx[6].Title + "";
+    	let t1_value = /*card*/ ctx[9].Title + "";
     	let t1;
     	let t2;
     	let p0;
-    	let t3_value = /*card*/ ctx[6].FriendFirstName + "";
+    	let t3_value = /*card*/ ctx[9].FriendFirstName + "";
     	let t3;
     	let t4;
-    	let t5_value = /*card*/ ctx[6].FriendLastName + "";
+    	let t5_value = /*card*/ ctx[9].FriendLastName + "";
     	let t5;
     	let t6;
-    	let t7_value = /*formatDate*/ ctx[1](/*card*/ ctx[6].EventDate) + "";
+    	let t7_value = /*formatDate*/ ctx[4](/*card*/ ctx[9].EventDate) + "";
     	let t7;
     	let t8;
     	let p1;
-    	let t9_value = /*card*/ ctx[6].Description1 + "";
+    	let t9_value = /*card*/ ctx[9].Description1 + "";
     	let t9;
     	let t10;
     	let i_1;
     	let t11;
-    	let t12_value = /*card*/ ctx[6].EventTitle + "";
+    	let t12_value = /*card*/ ctx[9].EventTitle + "";
     	let t12;
     	let t13;
 
-    	let t14_value = (new Date(/*card*/ ctx[6].EventDate).getFullYear() == new Date().getFullYear() + 2
+    	let t14_value = (new Date(/*card*/ ctx[9].EventDate).getFullYear() == new Date().getFullYear() + 2
     	? "через год"
     	: "") + "";
 
@@ -1226,18 +1434,19 @@ var app = (function () {
     	let t15;
     	let div4;
     	let p2;
-    	let t16_value = /*card*/ ctx[6].Price + "";
+    	let t16_value = /*card*/ ctx[9].Price + "";
     	let t16;
     	let sup;
     	let t18;
     	let div3;
     	let a;
-    	let t19_value = (/*card*/ ctx[6].IsReserved == 1 ? "Бронь" : "Подарить") + "";
+    	let t19_value = (/*card*/ ctx[9].IsReserved == 1 ? "Бронь" : "Подарить") + "";
     	let t19;
     	let a_class_value;
     	let t20;
     	let div5;
     	let t21;
+    	let div11_intro;
 
     	const block = {
     		c: function create() {
@@ -1284,44 +1493,44 @@ var app = (function () {
     			div5 = element("div");
     			t21 = space();
     			attr_dev(div0, "class", "image-wrapper");
-    			set_style(div0, "background-image", "url('" + /*card*/ ctx[6].Image + "')");
-    			add_location(div0, file$1, 61, 14, 1697);
+    			set_style(div0, "background-image", "url('" + /*card*/ ctx[9].Image + "')");
+    			add_location(div0, file$1, 107, 14, 3032);
     			attr_dev(div1, "class", "col-12 col-md-4");
-    			add_location(div1, file$1, 60, 12, 1653);
-    			add_location(strong, file$1, 70, 22, 2121);
+    			add_location(div1, file$1, 106, 12, 2988);
+    			add_location(strong, file$1, 114, 22, 3374);
     			attr_dev(h6, "class", "card-title mbr-fonts-style display-5");
-    			add_location(h6, file$1, 69, 20, 2049);
+    			add_location(h6, file$1, 113, 20, 3302);
     			attr_dev(p0, "class", "mbr-text mbr-fonts-style grey bottom-less");
-    			add_location(p0, file$1, 72, 20, 2197);
-    			add_location(i_1, file$1, 79, 22, 2548);
+    			add_location(p0, file$1, 116, 20, 3450);
+    			add_location(i_1, file$1, 123, 22, 3801);
     			attr_dev(p1, "class", "mbr-text mbr-fonts-style display-7");
-    			add_location(p1, file$1, 77, 20, 2437);
+    			add_location(p1, file$1, 121, 20, 3690);
     			attr_dev(div2, "class", "col-md");
-    			add_location(div2, file$1, 68, 18, 2008);
-    			attr_dev(sup, "class", "svelte-152tipk");
-    			add_location(sup, file$1, 87, 75, 2933);
+    			add_location(div2, file$1, 112, 18, 3261);
+    			attr_dev(sup, "class", "svelte-1pfdwgq");
+    			add_location(sup, file$1, 131, 75, 4186);
     			attr_dev(p2, "class", "price mbr-fonts-style display-2");
-    			add_location(p2, file$1, 87, 20, 2878);
+    			add_location(p2, file$1, 131, 20, 4131);
     			attr_dev(a, "href", "index.html");
-    			attr_dev(a, "class", a_class_value = "btn btn-primary display-4 " + (/*card*/ ctx[6].IsReserved == 1 ? 'blocked' : ''));
-    			add_location(a, file$1, 89, 22, 3023);
+    			attr_dev(a, "class", a_class_value = "btn btn-primary display-4 " + (/*card*/ ctx[9].IsReserved == 1 ? 'blocked' : ''));
+    			add_location(a, file$1, 133, 22, 4276);
     			attr_dev(div3, "class", "mbr-section-btn");
-    			add_location(div3, file$1, 88, 20, 2971);
+    			add_location(div3, file$1, 132, 20, 4224);
     			attr_dev(div4, "class", "col-md-auto");
-    			add_location(div4, file$1, 86, 18, 2832);
-    			add_location(div5, file$1, 93, 18, 3263);
+    			add_location(div4, file$1, 130, 18, 4085);
+    			add_location(div5, file$1, 137, 18, 4516);
     			attr_dev(div6, "class", "row");
-    			add_location(div6, file$1, 67, 16, 1972);
+    			add_location(div6, file$1, 111, 16, 3225);
     			attr_dev(div7, "class", "card-box");
-    			add_location(div7, file$1, 66, 14, 1933);
+    			add_location(div7, file$1, 110, 14, 3186);
     			attr_dev(div8, "class", "col-12 col-md");
-    			add_location(div8, file$1, 65, 12, 1891);
+    			add_location(div8, file$1, 109, 12, 3144);
     			attr_dev(div9, "class", "row align-items-center");
-    			add_location(div9, file$1, 59, 10, 1604);
+    			add_location(div9, file$1, 105, 10, 2939);
     			attr_dev(div10, "class", "card-wrapper");
-    			add_location(div10, file$1, 58, 8, 1567);
+    			add_location(div10, file$1, 104, 8, 2902);
     			attr_dev(div11, "class", "card");
-    			add_location(div11, file$1, 57, 6, 1540);
+    			add_location(div11, file$1, 103, 6, 2819);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div11, anchor);
@@ -1366,29 +1575,44 @@ var app = (function () {
     			append_dev(div6, div5);
     			append_dev(div11, t21);
     		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*streamShow*/ 1) {
-    				set_style(div0, "background-image", "url('" + /*card*/ ctx[6].Image + "')");
+    		p: function update(new_ctx, dirty) {
+    			ctx = new_ctx;
+
+    			if (dirty & /*streamShow*/ 8) {
+    				set_style(div0, "background-image", "url('" + /*card*/ ctx[9].Image + "')");
     			}
 
-    			if (dirty & /*streamShow*/ 1 && t1_value !== (t1_value = /*card*/ ctx[6].Title + "")) set_data_dev(t1, t1_value);
-    			if (dirty & /*streamShow*/ 1 && t3_value !== (t3_value = /*card*/ ctx[6].FriendFirstName + "")) set_data_dev(t3, t3_value);
-    			if (dirty & /*streamShow*/ 1 && t5_value !== (t5_value = /*card*/ ctx[6].FriendLastName + "")) set_data_dev(t5, t5_value);
-    			if (dirty & /*streamShow*/ 1 && t7_value !== (t7_value = /*formatDate*/ ctx[1](/*card*/ ctx[6].EventDate) + "")) set_data_dev(t7, t7_value);
-    			if (dirty & /*streamShow*/ 1 && t9_value !== (t9_value = /*card*/ ctx[6].Description1 + "")) set_data_dev(t9, t9_value);
-    			if (dirty & /*streamShow*/ 1 && t12_value !== (t12_value = /*card*/ ctx[6].EventTitle + "")) set_data_dev(t12, t12_value);
+    			if (dirty & /*streamShow*/ 8 && t1_value !== (t1_value = /*card*/ ctx[9].Title + "")) set_data_dev(t1, t1_value);
+    			if (dirty & /*streamShow*/ 8 && t3_value !== (t3_value = /*card*/ ctx[9].FriendFirstName + "")) set_data_dev(t3, t3_value);
+    			if (dirty & /*streamShow*/ 8 && t5_value !== (t5_value = /*card*/ ctx[9].FriendLastName + "")) set_data_dev(t5, t5_value);
+    			if (dirty & /*streamShow*/ 8 && t7_value !== (t7_value = /*formatDate*/ ctx[4](/*card*/ ctx[9].EventDate) + "")) set_data_dev(t7, t7_value);
+    			if (dirty & /*streamShow*/ 8 && t9_value !== (t9_value = /*card*/ ctx[9].Description1 + "")) set_data_dev(t9, t9_value);
+    			if (dirty & /*streamShow*/ 8 && t12_value !== (t12_value = /*card*/ ctx[9].EventTitle + "")) set_data_dev(t12, t12_value);
 
-    			if (dirty & /*streamShow*/ 1 && t14_value !== (t14_value = (new Date(/*card*/ ctx[6].EventDate).getFullYear() == new Date().getFullYear() + 2
+    			if (dirty & /*streamShow*/ 8 && t14_value !== (t14_value = (new Date(/*card*/ ctx[9].EventDate).getFullYear() == new Date().getFullYear() + 2
     			? "через год"
     			: "") + "")) set_data_dev(t14, t14_value);
 
-    			if (dirty & /*streamShow*/ 1 && t16_value !== (t16_value = /*card*/ ctx[6].Price + "")) set_data_dev(t16, t16_value);
-    			if (dirty & /*streamShow*/ 1 && t19_value !== (t19_value = (/*card*/ ctx[6].IsReserved == 1 ? "Бронь" : "Подарить") + "")) set_data_dev(t19, t19_value);
+    			if (dirty & /*streamShow*/ 8 && t16_value !== (t16_value = /*card*/ ctx[9].Price + "")) set_data_dev(t16, t16_value);
+    			if (dirty & /*streamShow*/ 8 && t19_value !== (t19_value = (/*card*/ ctx[9].IsReserved == 1 ? "Бронь" : "Подарить") + "")) set_data_dev(t19, t19_value);
 
-    			if (dirty & /*streamShow*/ 1 && a_class_value !== (a_class_value = "btn btn-primary display-4 " + (/*card*/ ctx[6].IsReserved == 1 ? 'blocked' : ''))) {
+    			if (dirty & /*streamShow*/ 8 && a_class_value !== (a_class_value = "btn btn-primary display-4 " + (/*card*/ ctx[9].IsReserved == 1 ? 'blocked' : ''))) {
     				attr_dev(a, "class", a_class_value);
     			}
     		},
+    		i: function intro(local) {
+    			if (!div11_intro) {
+    				add_render_callback(() => {
+    					div11_intro = create_in_transition(div11, fly, {
+    						y: -25,
+    						delay: /*i*/ ctx[11] % /*pageItemsSize*/ ctx[0] * 100
+    					});
+
+    					div11_intro.start();
+    				});
+    			}
+    		},
+    		o: noop,
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div11);
     		}
@@ -1398,7 +1622,41 @@ var app = (function () {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(57:4) {#each streamShow as card, i}",
+    		source: "(103:4) {#each streamShow as card, i}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (148:2) {#if !isNextPageLoaded && !isLastPageLoaded}
+    function create_if_block(ctx) {
+    	let div1;
+    	let div0;
+
+    	const block = {
+    		c: function create() {
+    			div1 = element("div");
+    			div0 = element("div");
+    			attr_dev(div0, "class", "loading svelte-1pfdwgq");
+    			add_location(div0, file$1, 149, 6, 4736);
+    			attr_dev(div1, "class", "loader svelte-1pfdwgq");
+    			add_location(div1, file$1, 148, 4, 4709);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, div0);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div1);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block.name,
+    		type: "if",
+    		source: "(148:2) {#if !isNextPageLoaded && !isLastPageLoaded}",
     		ctx
     	});
 
@@ -1408,13 +1666,16 @@ var app = (function () {
     function create_fragment$3(ctx) {
     	let section;
     	let div;
-    	let each_value = /*streamShow*/ ctx[0];
+    	let t;
+    	let each_value = /*streamShow*/ ctx[3];
     	validate_each_argument(each_value);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value.length; i += 1) {
     		each_blocks[i] = create_each_block(get_each_context(ctx, each_value, i));
     	}
+
+    	let if_block = !/*isNextPageLoaded*/ ctx[1] && !/*isLastPageLoaded*/ ctx[2] && create_if_block(ctx);
 
     	const block = {
     		c: function create() {
@@ -1425,11 +1686,13 @@ var app = (function () {
     				each_blocks[i].c();
     			}
 
+    			t = space();
+    			if (if_block) if_block.c();
     			attr_dev(div, "class", "container");
-    			add_location(div, file$1, 55, 2, 1476);
+    			add_location(div, file$1, 101, 2, 2755);
     			attr_dev(section, "class", "features8 cid-shi8I9qCDA");
     			attr_dev(section, "id", "features9-2");
-    			add_location(section, file$1, 54, 0, 1414);
+    			add_location(section, file$1, 100, 0, 2693);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1441,10 +1704,13 @@ var app = (function () {
     			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].m(div, null);
     			}
+
+    			append_dev(section, t);
+    			if (if_block) if_block.m(section, null);
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*streamShow, Date, formatDate*/ 3) {
-    				each_value = /*streamShow*/ ctx[0];
+    			if (dirty & /*streamShow, Date, formatDate*/ 24) {
+    				each_value = /*streamShow*/ ctx[3];
     				validate_each_argument(each_value);
     				let i;
 
@@ -1453,9 +1719,11 @@ var app = (function () {
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
+    						transition_in(each_blocks[i], 1);
     					} else {
     						each_blocks[i] = create_each_block(child_ctx);
     						each_blocks[i].c();
+    						transition_in(each_blocks[i], 1);
     						each_blocks[i].m(div, null);
     					}
     				}
@@ -1466,12 +1734,28 @@ var app = (function () {
 
     				each_blocks.length = each_value.length;
     			}
+
+    			if (!/*isNextPageLoaded*/ ctx[1] && !/*isLastPageLoaded*/ ctx[2]) {
+    				if (if_block) ; else {
+    					if_block = create_if_block(ctx);
+    					if_block.c();
+    					if_block.m(section, null);
+    				}
+    			} else if (if_block) {
+    				if_block.d(1);
+    				if_block = null;
+    			}
     		},
-    		i: noop,
+    		i: function intro(local) {
+    			for (let i = 0; i < each_value.length; i += 1) {
+    				transition_in(each_blocks[i]);
+    			}
+    		},
     		o: noop,
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(section);
     			destroy_each(each_blocks, detaching);
+    			if (if_block) if_block.d();
     		}
     	};
 
@@ -1492,6 +1776,7 @@ var app = (function () {
 
     	const formatDate = date => {
     		const eventDate = new Date(date);
+    		const nowDate = new Date();
 
     		const monthNames = [
     			"Января",
@@ -1511,25 +1796,40 @@ var app = (function () {
     		return `
       ${eventDate.getDate()}
       ${monthNames[eventDate.getMonth()]}
-      ${eventDate.getFullYear()}
-      года
+      ${eventDate.getFullYear() == nowDate.getFullYear() + 1
+		? "следующего года"
+		: ""}
     `;
     	};
 
     	let pageIndex = 0;
+    	let pageItemsSize = -1; // DETECT ONE PAGE ELEMENTS AMOUNT (FOR FLY.DELAY CALCULATION AND PRE-DETECT END OF A LIST)
+    	let isNextPageLoaded = false;
+    	let isLastPageLoaded = false;
     	let streamDictionary = {};
     	let streamShow = [];
 
     	// LOAD STREAM DATA
     	const loadStreamPage = (page, token, callback) => {
-    		if (token == null) return;
+    		if (token == null || isLastPageLoaded) return;
+    		console.log(token);
 
     		Server.fetchGet(`${urlStream}${page}`, token, value => {
-    			console.log("Load Stream Page #", page);
+    			console.log("Load Stream Page #", page, value);
     			const compiledValue = (0, eval)(`(${value.details})`);
+
+    			if (compiledValue.length == 0) {
+    				$$invalidate(2, isLastPageLoaded = true);
+    				return;
+    			}
+
+    			$$invalidate(0, pageItemsSize = pageItemsSize == -1
+    			? compiledValue.length
+    			: pageItemsSize);
+
     			streamDictionary[page] = compiledValue;
 
-    			$$invalidate(0, streamShow = Object.keys(streamDictionary).reduce(
+    			$$invalidate(3, streamShow = Object.keys(streamDictionary).reduce(
     				function (r, k) {
     					return r.concat(streamDictionary[k]);
     				},
@@ -1537,6 +1837,11 @@ var app = (function () {
     			));
 
     			console.log("Loaded stream elements", streamShow);
+
+    			if (compiledValue.length != pageItemsSize) {
+    				$$invalidate(2, isLastPageLoaded = true);
+    			}
+
     			if (callback) callback(value);
     		});
     	};
@@ -1545,10 +1850,22 @@ var app = (function () {
 
     	appUser.subscribe(value => {
     		userDetails = value;
+    		loadStreamPage(pageIndex, userDetails.jwtToken, value => $$invalidate(1, isNextPageLoaded = true));
+    	});
 
-    		loadStreamPage(pageIndex, userDetails.jwtToken, value => {
-    			setTimeout(() => loadStreamPage(pageIndex + 1, userDetails.jwtToken), 2000);
-    		});
+    	window.addEventListener("scroll", e => {
+    		var h = document.documentElement,
+    			b = document.body,
+    			st = "scrollTop",
+    			sh = "scrollHeight";
+
+    		const scr = (h[st] || b[st]) / ((h[sh] || b[sh]) - h.clientHeight) * 100;
+
+    		if (isNextPageLoaded && scr > 50) {
+    			$$invalidate(1, isNextPageLoaded = false);
+    			pageIndex++;
+    			loadStreamPage(pageIndex, userDetails.jwtToken, value => $$invalidate(1, isNextPageLoaded = true));
+    		}
     	});
 
     	const writable_props = [];
@@ -1561,8 +1878,12 @@ var app = (function () {
     		Server,
     		urlStream,
     		appUser,
+    		fly,
     		formatDate,
     		pageIndex,
+    		pageItemsSize,
+    		isNextPageLoaded,
+    		isLastPageLoaded,
     		streamDictionary,
     		streamShow,
     		loadStreamPage,
@@ -1571,8 +1892,11 @@ var app = (function () {
 
     	$$self.$inject_state = $$props => {
     		if ('pageIndex' in $$props) pageIndex = $$props.pageIndex;
+    		if ('pageItemsSize' in $$props) $$invalidate(0, pageItemsSize = $$props.pageItemsSize);
+    		if ('isNextPageLoaded' in $$props) $$invalidate(1, isNextPageLoaded = $$props.isNextPageLoaded);
+    		if ('isLastPageLoaded' in $$props) $$invalidate(2, isLastPageLoaded = $$props.isLastPageLoaded);
     		if ('streamDictionary' in $$props) streamDictionary = $$props.streamDictionary;
-    		if ('streamShow' in $$props) $$invalidate(0, streamShow = $$props.streamShow);
+    		if ('streamShow' in $$props) $$invalidate(3, streamShow = $$props.streamShow);
     		if ('userDetails' in $$props) userDetails = $$props.userDetails;
     	};
 
@@ -1580,7 +1904,7 @@ var app = (function () {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [streamShow, formatDate];
+    	return [pageItemsSize, isNextPageLoaded, isLastPageLoaded, streamShow, formatDate];
     }
 
     class Stream extends SvelteComponentDev {

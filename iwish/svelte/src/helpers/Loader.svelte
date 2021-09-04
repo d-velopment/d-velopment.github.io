@@ -52,9 +52,13 @@
 
   // LOAD SERVER DATA
   const loadUserAuth = (callback) => {
+    const authCredentials = {
+      "username": "test", 
+      "password": "test"
+    }
     authData = DataStorage.permanentGet("auth", () => {
-      Server.fetchPost(urlAuth, { username: "test", password: "test" }, null, (value) => {
-        if (value.id != null) {
+      Server.fetchPost(urlAuth, authCredentials, null, (value) => {
+        if (value != null && value.id !== null) {
           DataStorage.permanentSet("auth", value, new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).addDays(1))
 
           authData = value

@@ -8,15 +8,17 @@ const isNullOrEmpty = (str) => {
 
 export const fetchPost = async (url, data, token, callback) => {
   if (isNullOrEmpty(url.trim())) return
+  
   const settings = {
     method: "POST",
     headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `${isNullOrEmpty(token) ? "" : "Bearer " + token}`,
+      "Accept": "application/json",
+      "Content-Type": "application/json"
     },
     body: JSON.stringify(data),
   }
+  if (!isNullOrEmpty(token))
+    settings.headers["Authorization"] = "Bearer " + token
 
   try {
     const response = await fetch(`${url}`, settings)
@@ -25,11 +27,13 @@ export const fetchPost = async (url, data, token, callback) => {
         const data = await response.json()
         callback(data)
       } catch (err) {
-        console.error(error)
+        console.error(err)
         callback(null)
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error(err)
+  }
 }
 
 export const fetchGet = async (url, token, callback) => {
@@ -37,11 +41,12 @@ export const fetchGet = async (url, token, callback) => {
   const settings = {
     method: "GET",
     headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      Authorization: `${isNullOrEmpty(token) ? "" : "Bearer " + token}`,
+      "Accept": "application/json",
+      "Content-Type": "application/json"
     },
   }
+  if (!isNullOrEmpty(token))
+    settings.headers["Authorization"] = "Bearer " + token
 
   try {
     const response = await fetch(`${url}`, settings)
