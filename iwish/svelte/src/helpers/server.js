@@ -8,17 +8,16 @@ const isNullOrEmpty = (str) => {
 
 export const fetchPost = async (url, data, token, callback) => {
   if (isNullOrEmpty(url.trim())) return
-  
+
   const settings = {
     method: "POST",
     headers: {
-      "Accept": "application/json",
-      "Content-Type": "application/json"
+      Accept: "application/json",
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(data),
   }
-  if (!isNullOrEmpty(token))
-    settings.headers["Authorization"] = "Bearer " + token
+  if (!isNullOrEmpty(token)) settings.headers["Authorization"] = "Bearer " + token
 
   try {
     const response = await fetch(`${url}`, settings)
@@ -41,12 +40,11 @@ export const fetchGet = async (url, token, callback) => {
   const settings = {
     method: "GET",
     headers: {
-      "Accept": "application/json",
-      "Content-Type": "application/json"
+      Accept: "application/json",
+      "Content-Type": "application/json",
     },
   }
-  if (!isNullOrEmpty(token))
-    settings.headers["Authorization"] = "Bearer " + token
+  if (!isNullOrEmpty(token)) settings.headers["Authorization"] = "Bearer " + token
 
   try {
     const response = await fetch(`${url}`, settings)

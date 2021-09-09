@@ -23,7 +23,6 @@
 
   // LOAD STREAM DATA
   const loadStreamPage = (page, token, callback) => {
-
     if (token == null || isLastPageLoaded) return
 
     console.log(token)

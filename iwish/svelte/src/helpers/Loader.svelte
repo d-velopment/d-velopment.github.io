@@ -53,8 +53,8 @@
   // LOAD SERVER DATA
   const loadUserAuth = (callback) => {
     const authCredentials = {
-      "username": "test", 
-      "password": "test"
+      username: "test",
+      password: "test",
     }
     authData = DataStorage.permanentGet("auth", () => {
       Server.fetchPost(urlAuth, authCredentials, null, (value) => {
