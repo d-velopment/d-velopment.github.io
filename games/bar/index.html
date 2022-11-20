@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="./static/style.css">
+    <script src="./main.js"></script>
+</head>
+<body>
+    <div class="panel">
+        <div class="logo"><img src="./assets/7.png" /><img src="./assets/7.png" /><img src="./assets/7.png" /></div>
+        <div class="balance">BALANCE<input id="balance" type="text" value="5000" oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/(\..*)\./g, '$1');" ></div>
+        <div class="balance">BET<input id="bet" type="text" value="1" oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/(\..*)\./g, '$1');" ></div>
+        <div class="balance">WIN<input id="win" type="text" value="" disabled></div>
+        <div class="balance">FORCE<input id="force" type="text" value="" maxlength="6" onfocus="var rect = this.getBoundingClientRect();
+            var info = document.getElementsByClassName('info')[0]; info.style.left = rect.left + 'px'; info.style.display='block';" onblur="document.getElementsByClassName('info')[0].style.display='none';" oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/(\..*)\./g, '$1');" style="margin-right: 50px;"></div>
+    </div>
+    <div class="wrapper">
+        <div id="container"></div>
+    </div>
+    <div class="info">
+        <b style="line-height: 40px;"><i>FORCER INFO:</i></b><br>
+        * Each odd number is the Symbol<br>
+        &nbsp;&nbsp;&nbsp;<i>(from 0 to 4)</i><br>
+        * Each even number is the Position<br>
+        &nbsp;&nbsp;&nbsp;<i>(from 0 to 2)</i><br>
+        * Three pairs are for three Reels<br>
+        <br>
+        <b><i>FORCER EXAMPLE:</i></b><br>
+        <b style="color:bisque; line-height: 40px;">[403122]</b><br>
+        * CHERRY on TOP<br>
+        * 7 in the CENTER<br>
+        * 2xBAR on BOTTOM<br>
+        <br>
+    </div>
+</body>
+</html>
