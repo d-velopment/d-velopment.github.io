@@ -13,10 +13,22 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0" />
   <link rel="icon" href="./electro.png" />
   <link rel="apple-touch-icon" href="./electro.png" />
+  <link rel="manifest" href="./manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Eesti Power Price</title>
   <script defer src="bundle.js"></script>
 </head>
 <body></body>
+<script>
+  if ('serviceWorker' in navigator) {
+     console.log("Will the service worker register?");
+     navigator.serviceWorker.register('service-worker.js')
+       .then(function(reg){
+         console.log("Yes, it did.");
+      }).catch(function(err) {
+         console.log("No it didn't. This happened:", err)
+     });
+  }
+ </script>
 </html>

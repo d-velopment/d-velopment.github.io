@@ -1,0 +1,30 @@
+{
+  "short_name": "Eesti Power",
+  "name": "Eesti Power Price",
+  "theme_color": "#4A90E2",
+  "background_color": "#F7F8F9",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "electro.png",
+      "type": "image/png",
+      "sizes": "48x48"
+    },
+    {
+      "src": "electro.png",
+      "type": "image/png",
+      "sizes": "96x96"
+    },
+    {
+      "src": "electro.png",
+      "type": "image/png",
+      "sizes": "144x144"
+    },
+    {
+      "src": "electro.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    }
+  ],
+  "start_url": "/?utm_source=launcher"
+}
