@@ -1,0 +1,172 @@
+<html>
+<head>
+<title>Simple Walker</title>
+<style>
+html, body {
+	margin: 0;
+	background: black;
+}
+.field {
+	position: absolute;
+	width: 100dvw;
+	height: 100dvh;
+	overflow: hidden;
+	background-color: green;
+	background-image: url('./grass.jpg');
+	background-image: linear-gradient(to bottom, #00000050, #ffffff10), url(./grass.jpg);
+}
+#kubik {
+	position: absolute;
+	width: 50px;
+	height: 100px;
+}
+#walker {
+	position: absolute;
+	background-image: url('./walker.gif');
+	width: inherit;
+	height: inherit;
+}
+.shadow {
+	display: flex;
+	position: absolute;
+	filter: blur(10px);
+	width: inherit;
+	height: inherit;
+	align-items: flex-end;
+	justify-content: center;
+}
+.init {
+	background-position-x: -140px;
+}
+.stop {
+	background-position-y: -28px;
+}
+.walk {
+	background-position-y: -148px;
+}
+.turn00 {
+	background-position-x: -140px;
+}
+.turn01 {
+	background-position-x: -140px;
+}
+.turn11 {
+	background-position-x: -197px;
+}
+.turn10 {
+	background-position-x: -250px;
+}
+.turn1-1 {
+	background-position-x: -303px;
+}
+.turn0-1 {
+	background-position-x: -358px;
+}
+.turn-1-1 {
+	background-position-x: -412px;
+}
+.turn-10 {
+	background-position-x: -30px;
+}
+.turn-11 {
+	background-position-x: -84px;
+}
+</style>
+</head>
+<body>
+	<div class="field">
+		<div id="kubik">
+			<div class="shadow">&lhblk;</div>
+			<div id="walker" class="init stop" />
+		</div>
+	</div>
+
+	<script>
+		let elements = {}
+		let setup = {}
+		const calculateSetup = () => {
+			elements = {
+				field: document.getElementsByClassName("field")?.[0],
+				kubik: document.getElementById("kubik"),
+				walker: document.getElementById("walker")
+			}
+			setup = {
+				screenSize: elements.field.getBoundingClientRect(),
+				kubikSize: elements.kubik.getBoundingClientRect()
+			}
+			setup.screenLimit = {
+				width: setup.screenSize.width - setup.kubikSize.width,
+				height: setup.screenSize.height - setup.kubikSize.height
+			}
+		}
+		calculateSetup()
+		window.onresize = calculateSetup
+
+		let x = setup.screenSize.width / 2 - setup.kubikSize.width / 2, 
+				y = setup.screenSize.height / 2 - setup.kubikSize.height / 2
+
+		const keys = {
+			"ArrowDown": { dy: 1 },
+			"ArrowUp": { dy: -1 },
+			"ArrowLeft": { dx: -1 },
+			"ArrowRight": { dx: 1 },
+			"ShiftLeft": { ds: 4 },
+			"ShiftRight": { ds: 0.25 }
+		}
+
+		const keysPressed = []
+
+		const calculateWalkerTurn = () => {
+			let lastdx = 0, lastdy = 0
+			keysPressed.forEach((key) => {
+				const delta = keys[key] || {}
+				lastdx += delta.dx || 0
+				lastdy += delta.dy || 0
+			})
+			walker.className = `${(Math.abs(lastdx) + Math.abs(lastdy) !== 0) ? "walk" : "stop"} turn${lastdx}${lastdy}`
+		}
+
+		document.addEventListener("keydown", (event) => {
+			console.log(event.code)
+			const delta = keys[event.code]
+			if (!delta || keysPressed.includes(event.code))
+				return
+			keysPressed.push(event.code)
+			calculateWalkerTurn()
+		})
+
+		document.addEventListener("keyup", (event) => {
+			const delta = keys[event.code]
+			if (!delta)
+				return
+
+			const keyIndex = keysPressed.indexOf(event.code)
+			if (keyIndex !== -1)
+				keysPressed.splice(keyIndex, 1)
+			calculateWalkerTurn()
+		})
+
+		const playAnimation = () => {
+			let dx = 0, dy = 0, ds = 1
+			keysPressed.forEach((key) => {
+				const delta = keys[key]
+				dx += (delta?.dx || 0)
+				dy += (delta?.dy || 0)
+				ds = (delta?.ds || ds)
+			})
+			x += dx * ds
+			y += dy * ds
+
+			x = Math.max(Math.min(x, setup.screenLimit.width), 0)
+			y = Math.max(Math.min(y, setup.screenLimit.height), 0)
+
+			elements.kubik.style.left = `${x}px`
+			elements.kubik.style.top = `${y}px`
+
+			requestAnimationFrame(playAnimation)
+		}
+		playAnimation()
+
+	</script>
+</body>
+</html>
