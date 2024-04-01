@@ -1,87 +1,149 @@
 <html>
+
 <head>
-<title>Simple Walker</title>
-<style>
-html, body {
-	margin: 0;
-	background: black;
-}
-.field {
-	position: absolute;
-	width: 100dvw;
-	height: 100dvh;
-	overflow: hidden;
-	background-color: green;
-	background-image: url('./grass.jpg');
-	background-image: linear-gradient(to bottom, #00000050, #ffffff10), url(./grass.jpg);
-}
-#kubik {
-	position: absolute;
-	width: 50px;
-	height: 100px;
-}
-#walker {
-	position: absolute;
-	background-image: url('./walker.gif');
-	width: inherit;
-	height: inherit;
-}
-.shadow {
-	display: flex;
-	position: absolute;
-	filter: blur(10px);
-	width: inherit;
-	height: inherit;
-	align-items: flex-end;
-	justify-content: center;
-}
-.init {
-	background-position-x: -140px;
-}
-.stop {
-	background-position-y: -28px;
-}
-.walk {
-	background-position-y: -148px;
-}
-.turn00 {
-	background-position-x: -140px;
-}
-.turn01 {
-	background-position-x: -140px;
-}
-.turn11 {
-	background-position-x: -197px;
-}
-.turn10 {
-	background-position-x: -250px;
-}
-.turn1-1 {
-	background-position-x: -303px;
-}
-.turn0-1 {
-	background-position-x: -358px;
-}
-.turn-1-1 {
-	background-position-x: -412px;
-}
-.turn-10 {
-	background-position-x: -30px;
-}
-.turn-11 {
-	background-position-x: -84px;
-}
-</style>
+	<title>Simple Walker</title>
+	<style>
+		html,
+		body {
+			margin: 0;
+			background: black;
+		}
+
+		.field {
+			position: absolute;
+			width: 100dvw;
+			height: 100dvh;
+			overflow: hidden;
+			background-color: green;
+			background-image: url('./grass.jpg');
+		}
+
+		#kubik {
+			position: absolute;
+			width: 50px;
+			height: 100px;
+		}
+
+		#walker {
+			position: absolute;
+			background-image: url('./walker.gif');
+			width: inherit;
+			height: inherit;
+			z-index: 2;
+		}
+
+		.shadow {
+			display: flex;
+			position: absolute;
+			filter: blur(10px);
+			width: inherit;
+			height: inherit;
+			align-items: flex-end;
+			justify-content: center;
+		}
+
+		.init {
+			background-position-x: -140px;
+		}
+
+		.stop {
+			background-position-y: -28px;
+		}
+
+		.walk {
+			background-position-y: -148px;
+		}
+
+		.turn00 {
+			background-position-x: -140px;
+		}
+
+		.turn01 {
+			background-position-x: -140px;
+		}
+
+		.turn11 {
+			background-position-x: -197px;
+		}
+
+		.turn10 {
+			background-position-x: -250px;
+		}
+
+		.turn1-1 {
+			background-position-x: -303px;
+		}
+
+		.turn0-1 {
+			background-position-x: -358px;
+		}
+
+		.turn-1-1 {
+			background-position-x: -412px;
+		}
+
+		.turn-10 {
+			background-position-x: -30px;
+		}
+
+		.turn-11 {
+			background-position-x: -84px;
+		}
+
+		.atlas {
+			position: absolute;
+			background-image: url('./atlas.png');
+			width: 0;
+			height: 0;
+			overflow: hidden;
+		}
+
+		.atlas.hidden {
+			display: none;
+		}
+
+		.atlas.back {
+			z-index: 1;
+		}
+
+		.atlas.front {
+			z-index: 3;
+		}
+
+		.atlas.tree1 {
+			width: 120px;
+			height: 190px;
+			background-position: 0px 0px;
+			opacity: 0.9;
+		}
+
+		.atlas.tree2 {
+			width: 120px;
+			height: 190px;
+			background-position: -130px 0px;
+			opacity: 0.9;
+		}
+	</style>
 </head>
+
 <body>
 	<div class="field">
 		<div id="kubik">
 			<div class="shadow">&lhblk;</div>
-			<div id="walker" class="init stop" />
+			<div id="walker" class="init stop"></div>
 		</div>
 	</div>
 
 	<script>
+		// --- [GAMEPLAY] SETUP ---
+		const keys = {
+			"ArrowDown": { dy: 1 },
+			"ArrowUp": { dy: -1 },
+			"ArrowLeft": { dx: -1 },
+			"ArrowRight": { dx: 1 },
+			"ShiftLeft": { ds: 2 },
+			"ShiftRight": { ds: 0.25 }
+		}
 		let elements = {}
 		let setup = {}
 		const calculateSetup = () => {
@@ -102,17 +164,91 @@ html, body {
 		calculateSetup()
 		window.onresize = calculateSetup
 
-		let x = setup.screenSize.width / 2 - setup.kubikSize.width / 2, 
-				y = setup.screenSize.height / 2 - setup.kubikSize.height / 2
-
-		const keys = {
-			"ArrowDown": { dy: 1 },
-			"ArrowUp": { dy: -1 },
-			"ArrowLeft": { dx: -1 },
-			"ArrowRight": { dx: 1 },
-			"ShiftLeft": { ds: 4 },
-			"ShiftRight": { ds: 0.25 }
+		// --- [SPRITES] SETUP ---
+		const playerSize = {
+			width: 35,
+			height: 90
 		}
+		const mapSize = {
+			width: 100,
+			height: 50
+		}
+		const sprites = {
+			tree1: {
+				className: "tree1",
+				tall: true,
+				width: 3,
+				height: 2,
+				base: -10,
+				thru: false
+			},
+			tree2: {
+				className: "tree2",
+				tall: true,
+				width: 3,
+				height: 2,
+				base: -10,
+				thru: false
+			}
+		}
+		let fieldMap = []
+		do {
+			const x = Math.floor(Math.random() * mapSize.width - mapSize.width / 2) * sprites.tree1.width * playerSize.width
+			const y = Math.floor(Math.random() * mapSize.height - mapSize.height / 2) * sprites.tree1.height * playerSize.height
+			const anyTree = [sprites.tree1, sprites.tree2]
+			if (!fieldMap.some((item) => item.x == x && item.y == y))
+				fieldMap.push({
+					id: `tree-${fieldMap.length}`,
+					origin: anyTree[Math.floor(Math.random() * anyTree.length)],
+					x,
+					y
+				})
+		} while (fieldMap.length < (mapSize.width * mapSize.height) / 5)
+		console.log(fieldMap)
+		let spritesMap = []
+		const renderSprites = () => {
+			const printSprite = (sprite) => {
+				let preSprite = document.createElement('div')
+				preSprite.id = `${sprite.id}`
+				preSprite.className = `atlas ${sprite.origin.className}`
+				preSprite.setAttribute("tall", sprite.origin.tall)
+				preSprite.setAttribute("coord-left", sprite.x)
+				preSprite.setAttribute("coord-top", sprite.y)
+				preSprite.setAttribute("coord-base", sprite.y + (sprite.origin.height - 1) * playerSize.height + sprite.origin.base)
+				elements.field.prepend(preSprite)
+				spritesMap.push(preSprite)
+			}
+			fieldMap.forEach((sprite) => {
+				printSprite(sprite)
+			})
+		}
+		renderSprites()
+		console.log(spritesMap)
+
+		const calculateSprites = ({ playerY, strafeX = 0, strafeY = 0 }) => {
+			spritesMap
+				.forEach((preSprite, i) => {
+					const coordLeft = parseInt(preSprite.getAttribute("coord-left") || 0)
+					const coordTop = parseInt(preSprite.getAttribute("coord-top") || 0)
+					const coordBase = parseInt(preSprite.getAttribute("coord-base") || 0)
+
+					preSprite.style.left = coordLeft + strafeX
+					preSprite.style.top = coordTop + strafeY
+
+					if ((coordBase + strafeY) < playerY) {
+						preSprite.classList.remove("front")
+						preSprite.classList.add("back")
+					}
+					else {
+						preSprite.classList.remove("back")
+						preSprite.classList.add("front")
+					}
+				})
+		}
+
+		// --- [INIT] PLAYER POSITION ---
+		let x = setup.screenSize.width / 2 - setup.kubikSize.width / 2,
+			y = setup.screenSize.height / 2 - setup.kubikSize.height / 2
 
 		const keysPressed = []
 
@@ -146,7 +282,9 @@ html, body {
 			calculateWalkerTurn()
 		})
 
+		let bx = 0, by = 0
 		const playAnimation = () => {
+
 			let dx = 0, dy = 0, ds = 1
 			keysPressed.forEach((key) => {
 				const delta = keys[key]
@@ -156,6 +294,17 @@ html, body {
 			})
 			x += dx * ds
 			y += dy * ds
+
+
+			if (x < 0 || x > setup.screenLimit.width)
+				bx -= dx * ds
+			if (y < 0 || y > setup.screenLimit.height)
+				by -= dy * ds
+
+			calculateSprites({ playerY: y, strafeX: bx, strafeY: by })
+
+			elements.field.style.backgroundPositionX = `${bx}px`
+			elements.field.style.backgroundPositionY = `${by}px`
 
 			x = Math.max(Math.min(x, setup.screenLimit.width), 0)
 			y = Math.max(Math.min(y, setup.screenLimit.height), 0)
@@ -169,4 +318,5 @@ html, body {
 
 	</script>
 </body>
+
 </html>
