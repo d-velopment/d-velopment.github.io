@@ -342,15 +342,14 @@
         transition: opacity 0.25s ease-in-out;
     }
     
-    .fileUpload {
-        position: absolute;
+    .fileUpload,
+    .fileDownload {
+        position: fixed;
+        left: 10px;
         overflow: hidden;
-
         display: flex;
         align-items: center;
         justify-content: center;
-
-        margin: 10px;
         font-weight: bold;
         font-family: sans-serif;
         text-align: center;
@@ -358,17 +357,29 @@
         color: #fff;
         border: 8px solid rgb(117,20,12);
         border-radius: 1em;
-
         cursor: pointer;
         background-color: rgb(128,128,38);
         z-index: 3;
     }
+
+    .fileUpload {
+        top: 10px;
+    }
+
+    .fileDownload {
+        bottom: 10px;
+    }
     
-    .fileUpload:hover {
+    .fileUpload:hover,
+    .fileDownload:hover {
         color: #fff;
         border-color: #fff;
         border-style: solid;
         box-shadow: inset 0 3px 4px #888;
+    }
+
+    .fileDownload {
+        text-decoration: none;
     }
     
     .fileUpload input.upload {
@@ -387,13 +398,15 @@
         filter: alpha(opacity=0);
     }
 
-    .fileUpload span {
+    .fileUpload span,
+    .fileDownload span {
         display: inline-flex;
         align-items: center;
         justify-content: center;
     }
 
-    .fileUpload span svg {
+    .fileUpload span svg,
+    .fileDownload span svg {
         width: 2em;
         height: 2em;
         fill: currentColor;
@@ -469,13 +482,13 @@
     </script>
     <script language="JavaScript" src="./wav.js/wav.js" type="text/javascript"><!-- x --> </script>
     <div class="outer" id="outerdiv" style="display:table">
-        <div class="bottomzone">
-            <div class="fileUpload" role="button" tabindex="0" onclick="document.getElementById('fileselect').click();" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); document.getElementById('fileselect').click(); }">
-                <span aria-hidden="true"><img src="diskette-32x32.png" alt=""/></span>
-                <input class="upload" type="file" id="fileselect" alt="ffsdf" name="fileselect[]"/>
-            </div>
+        <div class="fileUpload" onclick="document.getElementById('fileselect').click();">
+            <span aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M11 4h2v8h3l-4 4-4-4h3zm-6 9h2v5h10v-5h2v7H5z"/></svg></span>
+            <input class="upload" type="file" id="fileselect" alt="ffsdf" name="fileselect[]"/>
         </div>
-        
+        <a class="fileDownload" href="archive.zip" download="archive.zip" title="Download complete ROM Archive">
+            <span aria-hidden="true"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M4 3h16v4H4zm1 6h14v11H5zm5 2v2h4v-2zm0 4v2h4v-2z"/></svg></span>
+        </a>
     </div>
     <div class="inner" id="canvasdiv">
             <canvas id="canvas" width="600" height="384" style="width: 100%; height: 100%;" onclick="window.parent.fullscreen(); return false;"></canvas>
