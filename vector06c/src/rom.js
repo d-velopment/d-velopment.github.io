@@ -324,12 +324,29 @@ function Loader(url, callback, callback_error, callback_fdd, callback_basic, par
     var initDrop = function(inputs) {
         let defaultTitle = document.title;
 
+        let fullscreenCanvas = function() {
+            if (typeof fullscreen === "function") {
+                fullscreen(true);
+                return;
+            }
+
+            let elem = document.getElementById("canvasdiv");
+            if (!elem) {
+                return;
+            }
+
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(function() {});
+            }
+        };
+
         // a message listener for loading from pretty assembler
         window.addEventListener("message", (e) => {
             const {cmd, file} = e.data;
             if (cmd === "loadfile") {
                 console.log("message loadfile: ", file);
                 document.title = defaultTitle + " - " + file.name;
+                fullscreenCanvas();
                 tryUnzip(file.name, file, callback);
             }
             else if (cmd === "debugger") {
@@ -405,6 +422,7 @@ function Loader(url, callback, callback_error, callback_fdd, callback_basic, par
                     }
                     if (fileselect.files && fileselect.files[0]) {
                         document.title = defaultTitle + " - " + fileselect.files[0].name;
+                        fullscreenCanvas();
                     }
                     tryUnzip(fileselect.files[0].name, fileselect.files[0], callback);
 
@@ -445,6 +463,7 @@ function Loader(url, callback, callback_error, callback_fdd, callback_basic, par
                     parent.className = parent.className.replace(/ dragover/g, "");
                     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
                         document.title = defaultTitle + " - " + e.dataTransfer.files[0].name;
+                        fullscreenCanvas();
                     }
                     tryUnzip(e.dataTransfer.files[0].name, e.dataTransfer.files[0], callback);
                 };
