@@ -1,0 +1,12 @@
+roms
+roms/*
+*.sublime-workspace
+*.swp
+test/node_modules/
+test/node_modules/*
+test/out/
+test/out/*
+test/all-*.js
+test/all.js
+test/results.txt
+.DS_Store

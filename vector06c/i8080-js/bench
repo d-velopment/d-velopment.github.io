@@ -1,0 +1,24 @@
+original: 
+real    8m7.867s
+user    8m6.465s
+sys 0m0.901s
+
+svo-current:
+real    6m48.247s
+user    6m44.550s
+sys 0m1.181s
+
+svo-functions:
+real    5m29.163s
+user    5m28.075s
+sys 0m0.656s
+
+svo-notsure
+real    5m54.703s
+user    5m46.631s
+sys 0m1.615s
+
+svo-functions, mov too:
+real    5m25.079s
+user    5m23.800s
+sys 0m0.634s
