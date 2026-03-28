@@ -322,11 +322,14 @@ function Loader(url, callback, callback_error, callback_fdd, callback_basic, par
     };
 
     var initDrop = function(inputs) {
+        let defaultTitle = document.title;
+
         // a message listener for loading from pretty assembler
         window.addEventListener("message", (e) => {
             const {cmd, file} = e.data;
             if (cmd === "loadfile") {
                 console.log("message loadfile: ", file);
+                document.title = defaultTitle + " - " + file.name;
                 tryUnzip(file.name, file, callback);
             }
             else if (cmd === "debugger") {
@@ -400,6 +403,9 @@ function Loader(url, callback, callback_error, callback_fdd, callback_basic, par
                         Loader.prototype.ChooserElement.style.display = "none";
                         Loader.prototype.ChooserElement = undefined;
                     }
+                    if (fileselect.files && fileselect.files[0]) {
+                        document.title = defaultTitle + " - " + fileselect.files[0].name;
+                    }
                     tryUnzip(fileselect.files[0].name, fileselect.files[0], callback);
 
                     // recreate the input thingy
@@ -437,6 +443,9 @@ function Loader(url, callback, callback_error, callback_fdd, callback_basic, par
                     e.preventDefault();
                     var parent = target.parentNode;
                     parent.className = parent.className.replace(/ dragover/g, "");
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        document.title = defaultTitle + " - " + e.dataTransfer.files[0].name;
+                    }
                     tryUnzip(e.dataTransfer.files[0].name, e.dataTransfer.files[0], callback);
                 };
             }
