@@ -1,0 +1,290 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  color: #152820;
+  background: #f6f8f5;
+  --green: #087946;
+  --zone: #6a7089;
+  --muted: #52635a;
+  --border: #d9e2da;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 320px;
+  margin: 0;
+}
+
+.topbar,
+.map-guide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 14px clamp(14px, 3vw, 32px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #144a35;
+  color: #fff;
+  font-size: 1.45rem;
+  font-weight: 800;
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.05rem, 3vw, 1.45rem);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.location-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid #144a35;
+  border-radius: 10px;
+  background: #144a35;
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.location-button:hover:not(:disabled) {
+  background: #0b3727;
+}
+
+.location-button[aria-pressed="true"] {
+  background: #e4f2e9;
+  color: #144a35;
+}
+
+.location-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.location-button:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 3px;
+}
+
+.map-frame {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  min-height: 220px;
+  margin-inline: clamp(0px, 2vw, 24px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #e7ede6;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+  background: #e7ede6;
+  font-family: inherit;
+  cursor: crosshair;
+}
+
+.leaflet-dragging #map.leaflet-grab {
+  cursor: grabbing;
+}
+
+#map .leaflet-tile-pane {
+  filter: saturate(0.9) brightness(1.2);
+}
+
+#map .leaflet-control-zoom a {
+  width: 40px;
+  height: 40px;
+  line-height: 40px;
+}
+
+#map .zone-label {
+  padding: 1px 6px;
+  border: 1px solid #d5d8e2;
+  border-radius: 6px;
+  background: #f8f9fc;
+  color: #3f4965;
+  box-shadow: none;
+  font-family: inherit;
+  font-weight: 750;
+}
+
+#map .zone-label::before {
+  display: none;
+}
+
+.map-status,
+.map-error {
+  position: absolute;
+  z-index: 900;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfdfa;
+  box-shadow: 0 2px 12px #15282014;
+}
+
+.map-status {
+  top: 12px;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  pointer-events: none;
+}
+
+.data-status,
+.location-status {
+  margin: 0;
+  font-size: 0.76rem;
+}
+
+.data-status {
+  font-weight: 750;
+}
+
+.location-status {
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.map-error {
+  top: 50%;
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 28px);
+  margin: 0;
+  transform: translate(-50%, -50%);
+}
+
+.position-dot {
+  position: absolute;
+  z-index: 800;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #000;
+  box-shadow: 0 0 0 1px #0005;
+  pointer-events: none;
+}
+
+.map-guide {
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.map-guide p {
+  margin: 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 0;
+  color: #152820;
+  font-weight: 650;
+  list-style: none;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.swatch {
+  width: 22px;
+}
+
+.parking-swatch {
+  border-top: 4px solid var(--green);
+  border-radius: 3px;
+}
+
+.zone-swatch {
+  border-top: 2px dashed var(--zone);
+}
+
+@media (max-width: 560px) {
+  .topbar {
+    gap: 8px;
+    padding-block: 10px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    font-size: 1.15rem;
+  }
+
+  .location-button {
+    gap: 5px;
+    max-width: 45%;
+    padding-inline: 8px;
+    font-size: 0.73rem;
+  }
+
+  .location-button svg {
+    flex: 0 0 16px;
+  }
+
+  .map-frame {
+    margin-inline: 0;
+    border-inline: 0;
+    border-radius: 0;
+  }
+
+  .map-guide {
+    gap: 6px;
+    padding-block: 8px;
+  }
+}
